@@ -30,12 +30,13 @@ logger = logging.getLogger(__name__)
 def _load_runtime() -> dict[str, object]:
     import broker as broker_lib
     import vsp as vsp_lib
-    import wf as wf_lib
     from broker import create_broker
     from vsp import load_vsp
     import pdf as pdf_lib
+    from dbstore import init_db
 
     _rt = get_runtime()
+    init_db(str(_rt["paths"]["db"]))
     broker = create_broker()
     sim=_rt['sim']=='true'
 
@@ -44,7 +45,6 @@ def _load_runtime() -> dict[str, object]:
         vsp_table.broker = broker
         vsp_table.start()
 
-    workflow = None
     ui_registry = load_ui_registry()
 
     # 初始化 PDF 报告生成器
@@ -59,10 +59,8 @@ def _load_runtime() -> dict[str, object]:
         vsp_lib=vsp_lib if _rt["config"].getboolean("vsp", "used") else None,
         vsp=vsp_table  if _rt["config"].getboolean("vsp", "used") else None,
 
-        wf_lib=wf_lib,
         pdf_lib=pdf_lib,
         broker=broker,
-        wf=workflow,
         ui_registry=ui_registry,
         pdf_report=pdf_report,
     )
@@ -88,13 +86,6 @@ def main() -> int:
         if cleanup_done:
             return
         cleanup_done = True
-
-        workflow = runtime.get("wf")
-        if workflow is not None:
-            try:
-                workflow.stop()
-            except Exception:
-                logger.exception("stop workflow failed")
 
         vsp = runtime.get("vsp")
         if vsp is not None:

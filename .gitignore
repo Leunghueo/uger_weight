@@ -23,3 +23,7 @@ Thumbs.db
 *.swp
 .vscode/
 .idea/
+
+# 运行时生成的报告与模板（reporting.py 自动生成）
+*.pdf
+measure_template.xlsx

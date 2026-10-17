@@ -26,9 +26,7 @@ uv run pyinstaller --noconfirm \
     --paths libs \
     --collect-submodules ui \
     --collect-submodules broker \
-    --collect-submodules plc \
     --collect-submodules vsp \
-    --collect-submodules wf \
     --collect-submodules pdf \
     --hidden-import PySide6.QtWebEngineCore \
     --hidden-import PySide6.QtWebEngineWidgets \

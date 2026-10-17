@@ -156,7 +156,6 @@ class Window(QMainWindow):
         self.size = self.runtime["size"]
         self.log_viewer: LogViewerDialog | None = None
         self._fault_message = "无"
-        self._plc_ready = bool(getattr(self.runtime.get("plc"), "is_connected", lambda: False)())
         self._vsp_ready = bool(getattr(self.runtime.get("vsp"), "alive", False))
         self._ai_ready = False
         self._broker_subscriptions: list[object] = []
@@ -228,13 +227,9 @@ class Window(QMainWindow):
         footer_layout.setContentsMargins(8, 4, 8, 4)
         footer_layout.setSpacing(8)
 
-        self.plc_status_label = QLabel("PLC状态: 未知", self.footer)
-        self.plc_status_label.setObjectName("statusStateLabel")
-        self._set_status_label_state(self.plc_status_label, False)
-
-        # self.vsp_status_label = QLabel("服务状态: 未知", self.footer)
-        # self.vsp_status_label.setObjectName("statusStateLabel")
-        # self._set_status_label_state(self.vsp_status_label, False)
+        self.vsp_status_label = QLabel("采集状态: 未知", self.footer)
+        self.vsp_status_label.setObjectName("statusStateLabel")
+        self._set_status_label_state(self.vsp_status_label, False)
 
         # self.ai_status_label = QLabel("AI服务状态: 未知", self.footer)
         # self.ai_status_label.setObjectName("statusStateLabel")
@@ -246,8 +241,7 @@ class Window(QMainWindow):
         self.fault_label.setToolTip("双击查看今日日志")
         self.fault_label.double_clicked.connect(self._open_today_log)
 
-        footer_layout.addWidget(self.plc_status_label)
-        # footer_layout.addWidget(self.vsp_status_label)
+        footer_layout.addWidget(self.vsp_status_label)
         # footer_layout.addWidget(self.ai_status_label)
         footer_layout.addWidget(self.fault_label, 1)
 
@@ -376,27 +370,20 @@ class Window(QMainWindow):
         self._fault_message = fault_message or "无"
         self._render_footer_status()
 
-    def update_footer_status(self, *, plc_ready: bool, vsp_ready: bool, fault_message: str) -> None:
-        self._plc_ready = plc_ready
-        # self._vsp_ready = vsp_ready
+    def update_footer_status(self, *, vsp_ready: bool, fault_message: str) -> None:
+        self._vsp_ready = vsp_ready
         self._fault_message = fault_message or "无"
         self._render_footer_status()
 
     def _render_footer_status(self) -> None:
-        self._set_status_label_state(self.plc_status_label, self._plc_ready)
-        self.plc_status_label.setText("PLC在线" if self._plc_ready else "PLC离线")
-        # self.plc_dialog_button.setEnabled(self._plc_ready)
-
-        # self._set_status_label_state(self.vsp_status_label, self._vsp_ready)
-        # self.dyn_dims_button.setEnabled(self._vsp_ready)
-        # self.vsp_status_label.setText("传感器在线" if self._vsp_ready else "传感器离线")
+        self._set_status_label_state(self.vsp_status_label, self._vsp_ready)
+        self.vsp_status_label.setText("传感器在线" if self._vsp_ready else "传感器离线")
 
         # self.ai_status_label.setText("AI服务在线" if self._ai_ready else "AI服务离线")
         self.fault_label.setText(f"故障信息: {self._fault_message}")
 
     def _refresh_runtime_status(self) -> None:
-        self._plc_ready = bool(getattr(self.runtime.get("plc"), "is_connected", lambda: False)())
-        # self._vsp_ready = bool(getattr(self.runtime["vsp"], "alive", False))
+        self._vsp_ready = bool(getattr(self.runtime.get("vsp"), "alive", False))
         # self._refresh_ai_status(render=False)
         self._render_footer_status()
 
@@ -410,12 +397,7 @@ class Window(QMainWindow):
         if broker is None:
             return
         self._broker_subscriptions = [
-            broker.subscribe("plc_poll", self._on_plc_poll),
-            # broker.subscribe("vsp_poll", self._on_vsp_poll),
-            broker.subscribe("pt_error", self._on_pt_error),
-            broker.subscribe("node_wait", self._on_node_wait),
-            broker.subscribe("msg_guard", self._on_guard_check),
-            broker.subscribe("switch_tab", self._on_switch_tab),
+            broker.subscribe("vsp_poll", self._on_vsp_poll),
         ]
 
     def _unsubscribe_runtime_events(self) -> None:
@@ -427,55 +409,14 @@ class Window(QMainWindow):
             broker.unsubscribe(subscription)
         self._broker_subscriptions.clear()
 
-    def _on_plc_poll(self, **payload) -> None:
-        self.runtime_event.emit({"topic": "plc_poll", **payload})
-
     def _on_vsp_poll(self, **payload) -> None:
         self.runtime_event.emit({"topic": "vsp_poll", **payload})
-
-    def _on_pt_error(self, **payload) -> None:
-        self.runtime_event.emit({"topic": "pt_error", **payload})
-
-    def _on_node_wait(self, **payload) -> None:
-        pass
-
-    def _on_guard_check(self, **payload) -> None:
-        self.runtime_event.emit({"topic": "msg_guard", **payload})
-
-    def _on_switch_tab(self, **payload) -> None:
-        self.runtime_event.emit({"topic": "switch_tab", **payload})
 
     def _apply_runtime_event(self, payload: dict[str, Any]) -> None:
         topic = payload.get("topic")
 
-        if topic == "plc_poll":
-            self._plc_ready = bool(payload.get("alive"))
-
-        elif topic == "vsp_poll":
+        if topic == "vsp_poll":
             self._vsp_ready = bool(payload.get("alive"))
-
-
-        elif topic == "pt_error":
-            pt_name = str(payload.get("pt_name") or "").strip()
-            info = str(payload.get("info") or "").strip()
-            error = str(payload.get("error") or "").strip()
-            message_parts = [part for part in (pt_name, info, error) if part]
-            self._fault_message = " | ".join(message_parts) if message_parts else "PLC错误"
-
-        elif topic == "msg_guard":
-            risks = payload.get("risks")
-            for risk in risks:
-                logger.warning(f"安全风险[{risk.name}][{risk.level}]:{risk.message}")
-                if risk.level=="HIGH":
-                    plc = self.runtime.get("plc")
-                    if plc is not None:
-                        plc._emc_stop()
-
-        elif topic == "switch_tab":
-            tab_id = payload.get("tab")
-            if tab_id in self.views:
-                self.open_view(tab_id, fixed=False)
-            return
 
         else:
             return

@@ -123,16 +123,11 @@ class JsonEditorWidget(QWidget):
         if self._source_path is None:
             return
         self.set_source(self._source_path)
-        # 如果重载的是 PLC/VSP 配置文件，强制更新对应配置（即时生效）
+        # 如果重载的是 VSP 配置文件，强制更新对应配置（即时生效）
         try:
             runtime = get_runtime()
-            plc_config_path: Path | None = runtime["paths"].get("plc_config")
             vsp_config_path: Path | None = runtime["paths"].get("vsp_config")
-            if plc_config_path is not None and self._source_path == plc_config_path.resolve():
-                plc = runtime.get("plc")
-                if plc is not None and hasattr(plc, "reload"):
-                    plc.reload()
-            elif vsp_config_path is not None and self._source_path == vsp_config_path.resolve():
+            if vsp_config_path is not None and self._source_path == vsp_config_path.resolve():
                 vsp = runtime.get("vsp")
                 if vsp is not None and hasattr(vsp, "reload"):
                     vsp.reload()
