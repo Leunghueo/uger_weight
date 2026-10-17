@@ -142,7 +142,7 @@ class MeasureView(QWidget):
         super().__init__()
         self.runtime = get_runtime()
         self._db_path = self.runtime["paths"]["db"]
-        self._maps: dict[str, list[int]] = self._load_maps()
+        self._maps: dict[str, dict] = self._load_maps()
         self._platform_widgets: dict[int, PlatformWidget] = {}
         self._tare: dict[int, float] = {}
         self._current_id: int | None = None
@@ -159,18 +159,32 @@ class MeasureView(QWidget):
         self._refresh_values()
 
     # ---------- 配置 ----------
-    def _load_maps(self) -> dict[str, list[int]]:
+    def _load_maps(self) -> dict[str, dict]:
+        """maps.json: {车型: {"称重台": [...], "校验数据": {...}}}。"""
         path = Path(self.runtime["paths"]["maps_config"])
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
-            return {str(k): [int(x) for x in v] for k, v in data.items() if isinstance(v, list)}
+            maps: dict[str, dict] = {}
+            for model, cfg in data.items():
+                if isinstance(cfg, dict):
+                    maps[str(model)] = {
+                        "称重台": [int(x) for x in cfg.get("称重台", [])],
+                        "校验数据": cfg.get("校验数据") or {},
+                    }
+                elif isinstance(cfg, list):  # 兼容旧格式 {车型: [台号...]}
+                    maps[str(model)] = {"称重台": [int(x) for x in cfg], "校验数据": {}}
+            return maps
         except Exception:
             logger.exception("读取车型台位配置失败: %s", path)
             return {}
 
     def _enabled_platforms(self) -> list[int]:
         model = self.model_combo.currentText().strip()
-        return list(self._maps.get(model, ALL_PLATFORMS))
+        return list(self._maps.get(model, {}).get("称重台", ALL_PLATFORMS))
+
+    def _model_spec(self, model: str) -> dict:
+        """取车型的校验数据（用于不平衡判定）。"""
+        return self._maps.get(model, {}).get("校验数据", {}) or {}
 
     def _is_sim(self) -> bool:
         return str(self.runtime.get("sim", "false")).lower() == "true"
@@ -405,11 +419,12 @@ class MeasureView(QWidget):
         if rid is None:
             QMessageBox.warning(self, "提示", "请先创建或选择一条测量记录，再开始测量")
             return
+        model = self.model_combo.currentText().strip()
         enabled = self._enabled_platforms()
         vals = self._read_live()
         missing = [p for p in enabled if vals.get(p) is None]
         tared = apply_tare(vals, self._tare)
-        results = calculate(tared, enabled)
+        results = calculate(tared, enabled, spec=self._model_spec(model))
         self._show_results(results)
 
         now = datetime.now().isoformat(timespec="seconds")

@@ -41,7 +41,7 @@ def _load_runtime() -> dict[str, object]:
     sim=_rt['sim']=='true'
 
     if _rt["config"].getboolean("vsp", "used"):
-        vsp_table = load_vsp(str(_rt["paths"]["vsp_config"]))
+        vsp_table = load_vsp(str(_rt["paths"]["vsp_config"]), sim=sim)
         vsp_table.broker = broker
         vsp_table.start()
 

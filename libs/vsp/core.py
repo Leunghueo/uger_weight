@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import socket
 import threading
 import time
@@ -53,20 +54,41 @@ class Endpoint:
 class VSPPointConfig:
     name: str
     endpoint: Endpoint
-    cmd: bytes
+    read_cmd: bytes
+    zero_cmd: bytes | None
     parser_name: str
     segs: SegmentMapping
     unit: str | None
     add: float
 
+    def _cmd_hex(self, cmd: bytes | None) -> str | None:
+        return " ".join(f"{byte:02X}" for byte in cmd) if cmd else None
+
     def to_dict(self) -> dict[str, Any]:
         return {
             "addr": f"{self.endpoint.host}@{self.endpoint.port}",
-            "cmd": " ".join(f"{byte:02X}" for byte in self.cmd),
+            "cmd": {
+                "read": self._cmd_hex(self.read_cmd),
+                "zero": self._cmd_hex(self.zero_cmd),
+            },
             "parser": self.parser_name,
             "segs": [f"{segment.source:g}@{segment.target:g}" for segment in self.segs.segments],
             "unit": self.unit,
         }
+
+
+def parse_cmds(raw: Any) -> tuple[bytes, bytes | None]:
+    """解析点位指令配置.
+
+    新格式: {"read": "<hex>", "zero": "<hex>"}；兼容旧格式: "<hex>"（仅 read）。
+    返回 (read_cmd, zero_cmd)。
+    """
+    if isinstance(raw, dict):
+        read_cmd = parse_hex_cmd(raw.get("read"))
+        zero_raw = raw.get("zero")
+        zero_cmd = parse_hex_cmd(zero_raw) if zero_raw else None
+        return read_cmd, zero_cmd
+    return parse_hex_cmd(raw), None
 
 
 class VSPPoint:
@@ -136,7 +158,8 @@ class TCPValueClient:
         self.parser_func = parser_func
         self.expect_binary = expect_binary
 
-    def read_value(self) -> float:
+    def request(self) -> bytes:
+        """发送指令并返回原始应答字节（不解析）。"""
         with socket.create_connection((self.host, self.port), timeout=self.timeout) as sock:
             sock.settimeout(self.timeout)
             sock.sendall(self.cmd)
@@ -146,7 +169,10 @@ class TCPValueClient:
                 payload = self._recv_text_payload(sock)
         if not payload:
             raise ValueError("empty payload")
-        return self.parser_func(payload)
+        return payload
+
+    def read_value(self) -> float:
+        return self.parser_func(self.request())
 
     def _recv_binary_packet(self, sock: socket.socket) -> bytes:
         header = self._recv_exact(sock, 3)
@@ -184,7 +210,10 @@ class TCPValueClient:
 
 
 class VSPTable:
-    def __init__(self, config_path: str | Path) -> None:
+    #: sim 模式下所有点位的统一测试地址（见 app.ini [sim]）
+    SIM_ENDPOINT = "localhost@10000"
+
+    def __init__(self, config_path: str | Path, sim: bool = False) -> None:
         config_file = Path(config_path).resolve()
         data = json.loads(config_file.read_text(encoding="utf-8"))
         service_config = data.get("service_config") or {}
@@ -202,16 +231,22 @@ class VSPTable:
         self._lock = threading.RLock()
         self._stop_event = threading.Event()
         self._thread: threading.Thread | None = None
+        self.sim = bool(sim)
 
         for name, point_data in raw_points.items():
             addr = point_data.get("addr") or point_data.get("port")
             if addr is None:
                 raise KeyError(f"{name}: missing addr")
+            if self.sim:
+                # sim 模式：临时用本地测试地址替代真实地址（不写回配置文件）
+                addr = self.SIM_ENDPOINT
+            read_cmd, zero_cmd = parse_cmds(point_data.get("cmd"))
             point = VSPPoint(
                 VSPPointConfig(
                     name=name,
                     endpoint=Endpoint.parse(addr),
-                    cmd=parse_hex_cmd(point_data.get("cmd")),
+                    read_cmd=read_cmd,
+                    zero_cmd=zero_cmd,
                     add=point_data.get("add"),
                     parser_name=str(point_data.get("parser") or "").strip(),
                     segs=SegmentMapping.parse(point_data.get("segs")),
@@ -293,6 +328,32 @@ class VSPTable:
     def get(self, name: str) -> VSPPoint:
         return self.points[name]
 
+    def zero(self, name: str, timeout: float | None = None) -> bool:
+        """向指定点位发送清零指令。
+
+        返回 True 表示指令已发送且收到应答；False 表示无清零指令或通信失败。
+        应答内容不解析（清零帧非数据帧）。
+        """
+        point = self.points[name]
+        zero_cmd = point.config.zero_cmd
+        if not zero_cmd:
+            raise ValueError(f"{name}: no zero command configured")
+        try:
+            TCPValueClient(
+                point.endpoint.host,
+                point.endpoint.port,
+                timeout=self.timeout_ms / 1000.0 if timeout is None else timeout,
+                recv_bytes=self.recv_bytes,
+                cmd=zero_cmd,
+                parser_func=lambda data: 0.0,
+                expect_binary=True,
+            ).request()
+            return True
+        except Exception as exc:
+            logger = logging.getLogger(__name__)
+            logger.warning("清零 %s 失败: %s", name, exc)
+            return False
+
     def snapshot(self) -> dict[str, Any]:
         with self._lock:
             return {
@@ -325,7 +386,8 @@ class VSPTable:
         point.config = VSPPointConfig(
             name=config.name,
             endpoint=config.endpoint,
-            cmd=config.cmd,
+            read_cmd=config.read_cmd,
+            zero_cmd=config.zero_cmd,
             parser_name=config.parser_name,
             segs=seg_mapping,
             unit=config.unit,
@@ -352,7 +414,7 @@ class VSPTable:
                     point.endpoint.port,
                     timeout=self.timeout_ms / 1000.0,
                     recv_bytes=self.recv_bytes,
-                    cmd=point.config.cmd,
+                    cmd=point.config.read_cmd,
                     parser_func=parser_func,
                     expect_binary=point.config.parser_name != "text_number",
                 ).read_value()
@@ -384,8 +446,13 @@ class VSPTable:
             )
 
 
-def load_vsp(config_path: str | Path) -> VSPTable:
-    return VSPTable(config_path)
+def load_vsp(config_path: str | Path, sim: bool = False) -> VSPTable:
+    """加载 VSP 点位表.
+
+    sim=True 时所有点位的 port 临时替换为 localhost@10000（本地测试用，
+    不写回配置文件）。对应 app.ini [sim] enable。
+    """
+    return VSPTable(config_path, sim=sim)
 
 @parser("text_number")
 def text_number(data: bytes) -> float:
