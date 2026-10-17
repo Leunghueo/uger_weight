@@ -241,13 +241,14 @@ class VSPTable:
                 # sim 模式：临时用本地测试地址替代真实地址（不写回配置文件）
                 addr = self.SIM_ENDPOINT
             read_cmd, zero_cmd = parse_cmds(point_data.get("cmd"))
+            add_raw = point_data.get("add")
             point = VSPPoint(
                 VSPPointConfig(
                     name=name,
                     endpoint=Endpoint.parse(addr),
                     read_cmd=read_cmd,
                     zero_cmd=zero_cmd,
-                    add=point_data.get("add"),
+                    add=float(add_raw) if add_raw is not None else 0.0,
                     parser_name=str(point_data.get("parser") or "").strip(),
                     segs=SegmentMapping.parse(point_data.get("segs")),
                     unit=point_data.get("unit"),

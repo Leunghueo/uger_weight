@@ -19,7 +19,6 @@ from PySide6.QtWidgets import (
     QDialog,
     QDialogButtonBox,
     QFormLayout,
-    QFrame,
     QGridLayout,
     QGroupBox,
     QHBoxLayout,
@@ -54,44 +53,51 @@ logger = logging.getLogger(__name__)
 ALL_PLATFORMS = list(range(1, 19))
 
 
-class PlatformWidget(QFrame):
-    """单个称重台：编号 + 实时值。"""
+class PlatformWidget(QWidget):
+    """单个称重台卡片：称重台X / 数值(1位小数) / kN。
+
+    样式由同目录 platform.qss 控制（独立文件，方便后期调整）。
+    """
 
     def __init__(self, platform: int, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.platform = platform
-        self.setFrameShape(QFrame.Box)
-        self.setMinimumSize(88, 66)
-
-        num = QLabel(str(platform))
-        num.setAlignment(Qt.AlignCenter)
-        font = num.font()
-        font.setPointSize(15)
-        font.setBold(True)
-        num.setFont(font)
-
-        self.value_label = QLabel("--")
-        self.value_label.setAlignment(Qt.AlignCenter)
+        self.setObjectName("platformCard")
+        # QWidget 默认不按样式表绘制背景，需要这个属性
+        self.setAttribute(Qt.WA_StyledBackground, True)
+        self.setMinimumSize(92, 104)
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(4, 4, 4, 4)
+        layout.setContentsMargins(4, 8, 4, 8)
         layout.setSpacing(2)
-        layout.addWidget(num)
+
+        self.title_label = QLabel(f"称重台{platform}")
+        self.title_label.setObjectName("platTitle")
+        self.title_label.setAlignment(Qt.AlignCenter)
+
+        self.value_label = QLabel("--")
+        self.value_label.setObjectName("platValue")
+        self.value_label.setAlignment(Qt.AlignCenter)
+
+        unit_label = QLabel("kN")
+        unit_label.setObjectName("platUnit")
+        unit_label.setAlignment(Qt.AlignCenter)
+
+        layout.addWidget(self.title_label)
         layout.addWidget(self.value_label)
+        layout.addWidget(unit_label)
         self.set_highlight(False)
 
     def set_value(self, value: float | None) -> None:
-        self.value_label.setText("--" if value is None else f"{value:.2f}")
+        self.value_label.setText("--" if value is None else f"{value:.1f}")
 
     def set_highlight(self, on: bool) -> None:
-        if on:
-            self.setStyleSheet(
-                "QFrame { border: 2px solid #e8912d; border-radius: 6px; background: #fff7e6; }"
-            )
-        else:
-            self.setStyleSheet(
-                "QFrame { border: 1px solid #b9c2cc; border-radius: 6px; background: #eef1f4; color: #8a939e; }"
-            )
+        self.setProperty("highlighted", "true" if on else "false")
+        # 动态属性变化后需要重新 polish 才能刷新样式
+        style = self.style()
+        style.unpolish(self)
+        style.polish(self)
+        self.update()
 
 
 class RecordEditDialog(QDialog):
@@ -186,6 +192,16 @@ class MeasureView(QWidget):
         """取车型的校验数据（用于不平衡判定）。"""
         return self._maps.get(model, {}).get("校验数据", {}) or {}
 
+    @staticmethod
+    def _load_platform_qss() -> str:
+        """加载称重台示意图区域的独立样式（platform.qss）。"""
+        qss_path = Path(__file__).resolve().parent / "platform.qss"
+        try:
+            return qss_path.read_text(encoding="utf-8")
+        except Exception:
+            logger.exception("读取 platform.qss 失败: %s", qss_path)
+            return ""
+
     # ---------- 界面 ----------
     def _build_ui(self) -> None:
         main = QHBoxLayout(self)
@@ -239,9 +255,13 @@ class MeasureView(QWidget):
         # ---- 右侧：坑位图形 + 结果 ----
         right = QVBoxLayout()
 
-        pits_row = QHBoxLayout()
+        pits_area = QWidget()
+        pits_area.setObjectName("pitsArea")
+        pits_row = QHBoxLayout(pits_area)
+        pits_row.setContentsMargins(0, 0, 0, 0)
         for pit_no, platforms in PITS.items():
             box = QGroupBox(f"坑{pit_no}")
+            box.setObjectName("pitBox")
             grid = QGridLayout(box)
             grid.setSpacing(6)
             evens = sorted(p for p in platforms if p % 2 == 0)
@@ -255,7 +275,8 @@ class MeasureView(QWidget):
                 grid.addWidget(w, 1, col)
                 self._platform_widgets[p] = w
             pits_row.addWidget(box, len(platforms))
-        right.addLayout(pits_row, 3)
+        pits_area.setStyleSheet(self._load_platform_qss())
+        right.addWidget(pits_area, 3)
 
         result_box = QGroupBox("测量结果")
         result_layout = QVBoxLayout(result_box)

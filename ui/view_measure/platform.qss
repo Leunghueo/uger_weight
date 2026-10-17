@@ -1,0 +1,57 @@
+/* 称重台示意图区域独立样式 —— 方案B · 深色工业
+ * 只作用于称重主页右侧的坑位图形区（#pitsArea），以后调颜色/圆角/字号
+ * 直接改这个文件，不用动代码。
+ * 卡片结构：QWidget#platformCard > QLabel#platTitle / QLabel#platValue / QLabel#platUnit
+ * 高亮状态：#platformCard[highlighted="true"]
+ */
+#pitsArea {
+    background: #22262d;
+}
+
+QGroupBox#pitBox {
+    font-size: 13px;
+    font-weight: bold;
+    color: #cfd6dd;
+    border: 1px solid #484f5a;
+    border-radius: 8px;
+    margin-top: 14px;
+    background: #2a2f37;
+}
+QGroupBox#pitBox::title {
+    subcontrol-origin: margin;
+    left: 12px;
+    padding: 0 6px;
+}
+
+#platformCard {
+    background: #2f3540;
+    border: 1px solid #484f5a;
+    border-radius: 10px;
+}
+#platformCard[highlighted="true"] {
+    background: #3d2f18;
+    border: 1.5px solid #e8912d;
+}
+
+#platTitle {
+    color: #9aa4b0;
+    font-size: 11px;
+}
+#platformCard[highlighted="true"] #platTitle {
+    color: #ffb84d;
+    font-weight: bold;
+}
+
+#platValue {
+    color: #eef1f4;
+    font-size: 20px;
+    font-weight: bold;
+}
+#platformCard[highlighted="true"] #platValue {
+    color: #ffb84d;
+}
+
+#platUnit {
+    color: #79828d;
+    font-size: 10px;
+}
