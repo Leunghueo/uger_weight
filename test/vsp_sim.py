@@ -15,12 +15,13 @@
 
 上位机解析：hex2dis 取 data[-6:-2] 即 D1..D4，按 32 位大端整数解读后 /1000，
 再经 segs 标定（如 111.67@676.5 即 ×6.058）得到 kN。
-默认随机数 16000~20000 对应约 97~121 kN，落在常规轮重区间内。
+默认随机数 17000~20000 对应约 103~121 kN，落在 maps.json 校验数据
+轮重[100,200] 区间内，便于本地联调。
 
 用法：
     python vsp_sim.py                                # 监听 127.0.0.1:10000
     python vsp_sim.py --host 0.0.0.0 --port-start 10000 --port-end 10020
-    python vsp_sim.py --min 16000 --max 20000        # 随机数范围
+    python vsp_sim.py --min 17000 --max 20000        # 随机数范围
 """
 from __future__ import annotations
 
@@ -110,7 +111,7 @@ def main() -> int:
     parser.add_argument("--host", default="127.0.0.1", help="监听地址 (默认 127.0.0.1)")
     parser.add_argument("--port-start", type=int, default=10000, help="起始端口 (默认 10000)")
     parser.add_argument("--port-end", type=int, default=10000, help="结束端口 (默认 10000)")
-    parser.add_argument("--min", type=int, default=16000, help="随机数下限 (默认 16000)")
+    parser.add_argument("--min", type=int, default=17000, help="随机数下限 (默认 17000)")
     parser.add_argument("--max", type=int, default=20000, help="随机数上限 (默认 20000)")
     args = parser.parse_args()
 

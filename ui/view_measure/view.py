@@ -186,9 +186,6 @@ class MeasureView(QWidget):
         """取车型的校验数据（用于不平衡判定）。"""
         return self._maps.get(model, {}).get("校验数据", {}) or {}
 
-    def _is_sim(self) -> bool:
-        return str(self.runtime.get("sim", "false")).lower() == "true"
-
     # ---------- 界面 ----------
     def _build_ui(self) -> None:
         main = QHBoxLayout(self)
@@ -388,7 +385,7 @@ class MeasureView(QWidget):
     def _read_live(self) -> dict[int, float | None]:
         vsp = self.runtime.get("vsp")
         try:
-            return read_platforms(vsp, ALL_PLATFORMS, sim=self._is_sim())
+            return read_platforms(vsp, ALL_PLATFORMS)
         except Exception:
             logger.exception("读取称重值失败")
             return {p: None for p in ALL_PLATFORMS}
@@ -401,18 +398,45 @@ class MeasureView(QWidget):
 
     # ---------- 去皮 / 测量 ----------
     def _on_tare(self) -> None:
+        """去皮：向每个启用的台位发送硬件清零指令（无需解析返回数据）。
+
+        硬件清零后，软件去皮量清零（避免重复扣除）。
+        无 VSP 时退回软件去皮（记录当前值）。
+        """
         rid = self._selected_id()
         if rid is None:
             QMessageBox.warning(self, "提示", "请先创建或选择一条测量记录，再去皮")
             return
-        vals = self._read_live()
-        tare = {p: v for p, v in vals.items() if v is not None}
-        if not tare:
-            QMessageBox.warning(self, "提示", "当前无有效称重数据，无法去皮")
+        enabled = self._enabled_platforms()
+        vsp = self.runtime.get("vsp")
+        if vsp is None:
+            vals = self._read_live()
+            tare = {p: v for p, v in vals.items() if v is not None}
+            if not tare:
+                QMessageBox.warning(self, "提示", "当前无有效称重数据，无法去皮")
+                return
+            self._tare = tare
+            update_measure_tare(self._db_path, rid, {str(k): v for k, v in tare.items()})
+            QMessageBox.information(self, "去皮", f"已记录 {len(tare)} 个台位的去皮值")
             return
-        self._tare = tare
-        update_measure_tare(self._db_path, rid, {str(k): v for k, v in tare.items()})
-        QMessageBox.information(self, "去皮", f"已记录 {len(tare)} 个台位的去皮值")
+
+        failed: list[int] = []
+        for p in enabled:
+            try:
+                ok = vsp.zero(f"称重台{p}")
+            except Exception:
+                logger.exception("称重台%s 清零指令发送失败", p)
+                ok = False
+            if not ok:
+                failed.append(p)
+        # 硬件已清零：软件去皮量清零，避免重复扣除
+        self._tare = {}
+        update_measure_tare(self._db_path, rid, {})
+        self._refresh_values()
+        if failed:
+            QMessageBox.warning(self, "去皮", f"以下台位清零失败：{failed}")
+        else:
+            QMessageBox.information(self, "去皮", f"已向 {len(enabled)} 个台位发送清零指令")
 
     def _on_measure(self) -> None:
         rid = self._selected_id()

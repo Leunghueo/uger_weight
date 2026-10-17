@@ -44,13 +44,15 @@ def platform_point_name(platform: int) -> str:
     return f"称重台{platform}"
 
 
-def read_platforms(vsp_table: Any, platforms: list[int], sim: bool = False) -> dict[int, float | None]:
+def read_platforms(vsp_table: Any, platforms: list[int]) -> dict[int, float | None]:
     """读取一组台号的当前称重值（kN）。
 
-    sim=True 或 vsp_table 为空时返回仿真数据（用于无硬件调试）。
+    有 VSP 时走真实采集（含 sim 模式：VSP 内部已把地址替换为
+    localhost@10000，走本地模拟器）；vsp_table 为空（VSP 未启用）
+    时返回仿真数据，用于无硬件调试。
     """
     values: dict[int, float | None] = {}
-    if sim or vsp_table is None:
+    if vsp_table is None:
         base = 75.0
         for p in platforms:
             values[p] = round(base + random.uniform(-4.0, 4.0), 3)
@@ -105,8 +107,17 @@ def calculate(
       轮重/轴重/车重：实测值须落在 [min, max] 内，否则记"超范围"；
       轮重差/轴重差/平衡：[warn, limit] 两级——超过 limit 记"超限"
         （不合格），介于 warn 与 limit 之间记"偏大"（预警，不判不合格）；
-      平衡值定义为各轴轮重差的最大值。
+      平衡值 = |左侧(单数号台)总重 - 右侧(偶数号台)总重|。
     spec 为 None 或某项缺失时，退回 THRESHOLDS 旧规则。
+
+    依据 GB/T 3317-2006 4.2.4（机车全整备状态）：
+      d) 每轮轮重与该轴两轮平均轮重之差 ≤ 轴平均轮重的 ±4%
+         → 轮重差(|左-右|) ≤ 轴平均轮重的 8%；
+      b) 每轴实际轴重与平均轴重之差 ≤ 平均轴重的 ±2%
+         → 轴重差(max-min) ≤ 平均轴重的 4%；
+      a) 机车总重允差 ±3%。
+    国标给出的是百分比准则；本函数采用 maps.json 校验数据的绝对
+    [min, max] 作为工程判定参数。
     """
     enabled_set = set(enabled)
 
@@ -128,7 +139,12 @@ def calculate(
     axle_values = list(axles.values())
     axle_diff = round(max(axle_values) - min(axle_values), 3) if len(axle_values) >= 2 else 0.0
     total = round(sum(v for v in wheels.values() if v is not None), 3)
-    balance_value = round(max(wheel_diff.values()), 3) if wheel_diff else 0.0
+    # 平衡值 = |左侧(单数号台)总重 - 右侧(偶数号台)总重|
+    left_total = sum(v for p, v in values.items()
+                     if p in enabled_set and p % 2 == 1 and v is not None)
+    right_total = sum(v for p, v in values.items()
+                      if p in enabled_set and p % 2 == 0 and v is not None)
+    balance_value = round(abs(left_total - right_total), 3)
 
     issues: list[dict[str, str]] = []
     failed = False
@@ -178,8 +194,7 @@ def calculate(
     if len(axle_values) >= 2:
         _check_diff("轴重差", axle_diff, "轴重差", "轴重差", "axle_diff")
     _check_range("车重", total, "车重", "整车重")
-    if wheel_diff:
-        _check_diff("平衡", balance_value, "平衡", "平衡值", "wheel_diff")
+    _check_diff("平衡", balance_value, "平衡", "平衡值(|左-右|)", "axle_diff")
 
     return {
         "wheels": wheels,            # 台号 -> 轮重(kN)
@@ -187,7 +202,7 @@ def calculate(
         "axles": axles,              # "a-b" -> 轴重(kN)
         "axle_diff": axle_diff,      # 轴重差(kN)
         "total": total,              # 整车重(kN)
-        "balance": balance_value,    # 平衡值 = 各轴轮重差最大值(kN)
+        "balance": balance_value,    # 平衡值 = |左侧(单数号)总重 - 右侧(偶数号)总重|(kN)
         "imbalance": issues,         # 不平衡检测问题列表
         "balanced": not failed,
         "missing": missing,
