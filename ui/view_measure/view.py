@@ -276,7 +276,7 @@ class MeasureView(QWidget):
                 self._platform_widgets[p] = w
             pits_row.addWidget(box, len(platforms))
         pits_area.setStyleSheet(self._load_platform_qss())
-        right.addWidget(pits_area, 3)
+        right.addWidget(pits_area, 2)
 
         result_box = QGroupBox("测量结果")
         result_layout = QVBoxLayout(result_box)
@@ -294,7 +294,7 @@ class MeasureView(QWidget):
         self.result_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.result_table.setEditTriggers(QTableWidget.NoEditTriggers)
         result_layout.addWidget(self.result_table, 1)
-        right.addWidget(result_box, 2)
+        right.addWidget(result_box, 5)
 
         main.addLayout(right, 1)
 
@@ -412,6 +412,7 @@ class MeasureView(QWidget):
             return {p: None for p in ALL_PLATFORMS}
 
     def _refresh_values(self) -> None:
+        # 所有称重台一律刷新并显示数据；车型启用的台位仅通过边框高亮提示
         self._last_values = self._read_live()
         shown = apply_tare(self._last_values, self._tare)
         for p, w in self._platform_widgets.items():
