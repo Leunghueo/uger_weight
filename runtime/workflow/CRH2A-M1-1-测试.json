@@ -1,0 +1,424 @@
+{
+  "id": "e1f07185-7588-4c12-b43f-d5d8448d2073",
+  "name": "新工作流",
+  "ctime": "2026-03-26T02:31:05.689Z",
+  "desc": "by工作流编辑平台",
+  "meta": {},
+  "nodes": {
+    "84384357": {
+      "node_id": "84384357",
+      "node_name": "空簧保压",
+      "type": "sys",
+      "desc": "上位机指令,根据args的algo区分",
+      "meta": {},
+      "args": {
+        "delay": 0,
+        "confirm": false,
+        "info": "",
+        "algo": "plot_air",
+        "data": {
+          "enabled": true,
+          "trail_type": "空簧保压"
+        },
+        "gnode": ""
+      },
+      "next": [
+        "1619b695"
+      ],
+      "gnode": ""
+    },
+    "head": {
+      "node_id": "head",
+      "node_name": "开始",
+      "type": "sys",
+      "desc": "工作流开始",
+      "meta": {},
+      "args": {
+        "confirm": true
+      },
+      "gnode": "",
+      "next": [
+        "5e7133f5"
+      ]
+    },
+    "end": {
+      "node_id": "end",
+      "node_name": "结束",
+      "type": "sys",
+      "desc": "工作流结束",
+      "meta": {},
+      "args": {
+        "confirm": false
+      },
+      "gnode": "gnode_end",
+      "next": []
+    },
+    "d22cfa2d": {
+      "node_id": "d22cfa2d",
+      "node_name": "分支模块",
+      "type": "select",
+      "desc": "选择后续分支流程",
+      "meta": {},
+      "args": {
+        "delay": 3,
+        "confirm": true
+      },
+      "gnode": "",
+      "next": [
+        "end",
+        "495015f8",
+        "9fb97883",
+        "ed15715d"
+      ]
+    },
+    "5e7133f5": {
+      "node_id": "5e7133f5",
+      "node_name": "计算试验压力",
+      "type": "sys",
+      "desc": "上位机指令,根据配置反算PLC压力",
+      "meta": {},
+      "args": {
+        "delay": 0,
+        "confirm": false,
+        "info": "",
+        "algo": "init_cal",
+        "data": {}
+      },
+      "gnode": "",
+      "next": [
+        "d22cfa2d"
+      ]
+    },
+    "cc476e97": {
+      "node_id": "cc476e97",
+      "node_name": "测试plc_batch",
+      "type": "plc_batch",
+      "desc": "可以执行并行的plc写入操作",
+      "meta": {},
+      "args": {
+        "delay": 0,
+        "confirm": false,
+        "actlist": [
+          {
+            "pt_name": "设定加载头1快进垂向位移",
+            "value": 10
+          },
+          {
+            "pt_name": "设定加载头2快进垂向位移",
+            "value": "测试"
+          },
+          {
+            "pt_name": "设定空气弹簧工作高度",
+            "value": "测试"
+          },
+          {
+            "pt_name": "启动液压系统",
+            "value": true,
+            "reset": false
+          }
+        ],
+        "done_list": [
+          "气压采集1<100",
+          "气压采集2<100"
+        ]
+      },
+      "gnode": "gnode_head",
+      "next": [
+        "23b00423"
+      ]
+    },
+    "23b00423": {
+      "node_id": "23b00423",
+      "node_name": "计算结果",
+      "type": "sys",
+      "desc": "上位机指令,根据配置反算PLC压力",
+      "meta": {},
+      "args": {
+        "delay": 0,
+        "confirm": false,
+        "info": "",
+        "algo": "cal_press_trail",
+        "data": {}
+      },
+      "gnode": "",
+      "next": [
+        "d3d26512"
+      ]
+    },
+    "d3d26512": {
+      "node_id": "d3d26512",
+      "node_name": "显示结果",
+      "type": "sys",
+      "desc": "上位机指令,根据配置反算PLC压力",
+      "meta": {},
+      "args": {
+        "delay": 0,
+        "confirm": false,
+        "info": "",
+        "algo": "show_result",
+        "data": {},
+        "gnode": ""
+      },
+      "gnode": "",
+      "next": []
+    },
+    "495015f8": {
+      "node_id": "495015f8",
+      "node_name": "测试计算",
+      "type": "sys",
+      "desc": "上位机指令,根据配置反算PLC压力",
+      "meta": {},
+      "args": {
+        "delay": 0,
+        "confirm": false,
+        "info": "",
+        "algo": "init_weight",
+        "data": {},
+        "gnode": ""
+      },
+      "gnode": "",
+      "next": [
+        "cc476e97"
+      ]
+    },
+    "9fb97883": {
+      "node_id": "9fb97883",
+      "node_name": "切换页面",
+      "type": "sys",
+      "desc": "上位机指令,根据args的algo区分",
+      "meta": {},
+      "args": {
+        "delay": 0,
+        "confirm": false,
+        "info": "",
+        "algo": "switch_tab",
+        "data": {
+          "tab": "view_airplot"
+        }
+      },
+      "next": [
+        "84384357"
+      ],
+      "gnode": ""
+    },
+    "f3e7968d": {
+      "node_id": "f3e7968d",
+      "node_name": "切换页面",
+      "type": "sys",
+      "desc": "上位机指令,根据args的algo区分",
+      "meta": {},
+      "args": {
+        "delay": 0,
+        "confirm": false,
+        "info": "",
+        "algo": "switch_tab",
+        "data": {
+          "tab": "view_dyn_dims"
+        }
+      },
+      "next": [],
+      "gnode": ""
+    },
+    "a3d0a15e": {
+      "node_id": "a3d0a15e",
+      "node_name": "空簧保压完成",
+      "type": "sys",
+      "desc": "上位机指令,根据args的algo区分",
+      "meta": {},
+      "args": {
+        "delay": 0,
+        "confirm": false,
+        "info": "",
+        "algo": "plot_air",
+        "data": {
+          "cmd": false,
+          "trail_type": "空簧保压"
+        },
+        "gnode": ""
+      },
+      "next": [
+        "f3e7968d"
+      ],
+      "gnode": ""
+    },
+    "1619b695": {
+      "node_id": "1619b695",
+      "node_name": "上位机指令",
+      "type": "sys",
+      "desc": "上位机指令,根据args的algo区分",
+      "meta": {},
+      "args": {
+        "delay": 0,
+        "confirm": false,
+        "info": "等待测试",
+        "algo": "wait",
+        "data": {
+          "seconds": "回流计时"
+        }
+      },
+      "next": [
+        "a3d0a15e"
+      ],
+      "gnode": ""
+    },
+    "ed15715d": {
+      "node_id": "ed15715d",
+      "node_name": "安全卫士",
+      "type": "sys",
+      "desc": "上位机指令,根据args的algo区分",
+      "meta": {},
+      "args": {
+        "delay": 0,
+        "confirm": false,
+        "info": "",
+        "algo": "guard",
+        "data": {
+          "name": "lift_rail",
+          "enable": true
+        }
+      },
+      "next": [
+        "f949cfd5"
+      ],
+      "gnode": ""
+    },
+    "f949cfd5": {
+      "node_id": "f949cfd5",
+      "node_name": "上位机指令",
+      "type": "sys",
+      "desc": "上位机指令,根据args的algo区分",
+      "meta": {},
+      "args": {
+        "delay": 0,
+        "confirm": false,
+        "info": "",
+        "algo": "wait",
+        "data": {
+          "seconds": 20
+        }
+      },
+      "next": [
+        "44fd187c"
+      ],
+      "gnode": ""
+    },
+    "44fd187c": {
+      "node_id": "44fd187c",
+      "node_name": "安全卫士",
+      "type": "sys",
+      "desc": "上位机指令,根据args的algo区分",
+      "meta": {},
+      "args": {
+        "delay": 0,
+        "confirm": false,
+        "info": "",
+        "algo": "guard",
+        "data": {
+          "name": "lift_rail",
+          "enable": false
+        },
+        "gnode": ""
+      },
+      "next": [
+        "75a8edab"
+      ],
+      "gnode": ""
+    },
+    "75a8edab": {
+      "node_id": "75a8edab",
+      "node_name": "上位机指令",
+      "type": "sys",
+      "desc": "上位机指令,根据args的algo区分",
+      "meta": {},
+      "args": {
+        "delay": 0,
+        "confirm": false,
+        "info": "",
+        "algo": "wait",
+        "data": {
+          "seconds": 20
+        },
+        "gnode": ""
+      },
+      "next": [],
+      "gnode": ""
+    }
+  },
+  "ui": {
+    "nodes": {
+      "84384357": {
+        "x": 896,
+        "y": 269.7727272727273
+      },
+      "head": {
+        "x": 224,
+        "y": 0
+      },
+      "end": {
+        "x": 1526.8181818181818,
+        "y": 0
+      },
+      "d22cfa2d": {
+        "x": 616,
+        "y": 0
+      },
+      "5e7133f5": {
+        "x": 224,
+        "y": 196
+      },
+      "cc476e97": {
+        "x": 616,
+        "y": 280
+      },
+      "23b00423": {
+        "x": 616,
+        "y": 476
+      },
+      "d3d26512": {
+        "x": 616,
+        "y": 644
+      },
+      "495015f8": {
+        "x": 616,
+        "y": 140
+      },
+      "9fb97883": {
+        "x": 895.7777777777777,
+        "y": 141.3888888888889
+      },
+      "f3e7968d": {
+        "x": 896,
+        "y": 700
+      },
+      "a3d0a15e": {
+        "x": 896,
+        "y": 560
+      },
+      "1619b695": {
+        "x": 896,
+        "y": 420
+      },
+      "ed15715d": {
+        "x": 1242.9545454545455,
+        "y": 72.54545454545455
+      },
+      "f949cfd5": {
+        "x": 1244.4999999999998,
+        "y": 219.7727272727273
+      },
+      "44fd187c": {
+        "x": 1244.3636363636363,
+        "y": 373.95454545454544
+      },
+      "75a8edab": {
+        "x": 1243.6363636363633,
+        "y": 530.2727272727273
+      }
+    },
+    "viewport": {
+      "x": -609.4253209943405,
+      "y": -14.885150509474101,
+      "zoom": 0.88
+    }
+  }
+}

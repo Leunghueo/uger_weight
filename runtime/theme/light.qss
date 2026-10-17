@@ -1,0 +1,240 @@
+QWidget {
+    background: #edf4f9;
+    color: #173042;
+    font: 10pt "Microsoft YaHei";
+}
+
+QMainWindow, QDialog {
+    background: #edf4f9;
+}
+
+QToolBar#mainToolbar {
+    spacing: 2px;
+    padding: 4px 6px;
+    background: #f7fbfe;
+    border: none;
+    border-bottom: 1px solid #d8e7f1;
+}
+
+QToolButton {
+    background: transparent;
+    color: #214259;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    padding: 3px 8px;
+}
+
+QToolButton:hover, QToolButton:pressed {
+    background: rgba(28, 144, 191, 0.10);
+    border: 1px solid #9ad4ea;
+}
+
+QWidget#frameLogoCard, QWidget#mainFooter {
+    background: #f7fbfe;
+    border: none;
+    border-bottom: 1px solid #d8e7f1;
+}
+
+QLabel#frameLogoImage {
+    padding: 1px 0 0 0;
+}
+
+QToolButton#currentUserButton {
+    background: #ffffff;
+    border: 1px solid #cfe2ec;
+    border-radius: 8px;
+    color: #214259;
+    font-weight: 600;
+    padding: 3px 8px;
+}
+
+QToolButton#currentUserButton:hover {
+    background: #eef7fb;
+    border: 1px solid #9ad4ea;
+}
+
+QToolButton#footerActionButton {
+    background: #ffffff;
+    border: 1px solid #cfe2ec;
+    border-radius: 8px;
+    color: #214259;
+    font-weight: 600;
+    padding: 3px 8px;
+}
+
+QToolButton#footerActionButton:hover {
+    background: #eef7fb;
+    border: 1px solid #9ad4ea;
+}
+
+QLabel#statusStateLabel {
+    color: #ffffff;
+    font-weight: 700;
+    border-radius: 8px;
+    padding: 3px 10px;
+}
+
+QTabWidget::pane {
+    border: none;
+}
+
+QTabBar::tab {
+    background: #e7f0f6;
+    color: #4a6980;
+    padding: 5px 10px;
+    margin-right: 2px;
+    border-top-left-radius: 8px;
+    border-top-right-radius: 8px;
+}
+
+QTabBar::tab:selected {
+    background: #ffffff;
+    color: #123149;
+}
+
+QFrame#flowControlPanel, QFrame#tableCard, QFrame#homeStatusBar, QFrame#anchorInfoCard, QFrame#dynamicRectCenterCard {
+    background: #ffffff;
+    border: 1px solid #d4e4ef;
+    border-radius: 12px;
+}
+
+QDialog#plcDialog QGroupBox {
+    background: #ffffff;
+    border: 1px solid #d4e4ef;
+    border-radius: 12px;
+    margin-top: 10px;
+    padding-top: 10px;
+    font-weight: 600;
+}
+
+QDialog#plcDialog QGroupBox::title {
+    subcontrol-origin: margin;
+    left: 10px;
+    padding: 0 4px;
+    color: #113149;
+}
+
+QFrame#monitorCard {
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #f8fcff, stop:1 #e5f4fb);
+    border: 1px solid #c8dfeb;
+    border-radius: 12px;
+}
+
+QLabel#homeHeroTitle {
+    font-size: 20px;
+    font-weight: 700;
+    color: #10324a;
+}
+
+QLabel#homeHeroDesc, QLabel#flowHint, QLabel#workflowState, QLabel#subtleTitle {
+    color: #587287;
+}
+
+QLabel#cardTitle {
+    font-size: 15px;
+    font-weight: 700;
+    color: #113149;
+}
+
+QLabel#flowCurrentLabel {
+    color: #157ea6;
+    font-weight: 600;
+}
+
+QLabel#anchorMetricLabel {
+    color: #466376;
+}
+
+QPushButton {
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #0f8fbe, stop:1 #41b7dc);
+    color: #ffffff;
+    font-weight: 700;
+    border: 1px solid #7bcbe7;
+    border-radius: 8px;
+    padding: 4px 8px;
+}
+
+QPushButton:hover {
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #12a5d8, stop:1 #6ad3ef);
+}
+
+QPushButton:pressed {
+    background: #1184af;
+}
+
+QPushButton:disabled {
+    background: #d5dfe6;
+    color: #8197a5;
+    border-color: #cfdae2;
+}
+
+QLineEdit#anchorMoveEdit {
+    background: #f9fcfe;
+    border: 1px solid #d6e5ee;
+    border-radius: 8px;
+    padding: 3px 6px;
+    color: #173042;
+}
+
+QLineEdit#flowMetaEdit {
+    background: #f9fcfe;
+    border: 1px solid #d6e5ee;
+    border-radius: 8px;
+    padding: 3px 6px;
+    color: #173042;
+}
+
+QListWidget, QTableWidget, QPlainTextEdit {
+    background: #f9fcfe;
+    alternate-background-color: #eff6fa;
+    border: 1px solid #d6e5ee;
+    border-radius: 8px;
+    padding: 3px;
+    color: #173042;
+    gridline-color: #dde9f0;
+    selection-background-color: rgba(24, 152, 198, 0.16);
+    selection-color: #0c2431;
+}
+
+QDialog#plcDialog QTextEdit,
+QDialog#plcDialog QLineEdit,
+QDialog#plcDialog QComboBox {
+    background: #f9fcfe;
+    border: 1px solid #d6e5ee;
+    border-radius: 8px;
+    padding: 3px 6px;
+    color: #173042;
+}
+
+QHeaderView::section {
+    background: #eef5f9;
+    color: #4d6a7d;
+    padding: 4px;
+    border: none;
+    border-bottom: 1px solid #d6e5ee;
+}
+
+QScrollBar:vertical, QScrollBar:horizontal {
+    background: transparent;
+    border: none;
+}
+
+QScrollBar::handle:vertical, QScrollBar::handle:horizontal {
+    background: #b7cddb;
+    border-radius: 5px;
+}
+
+QLabel#statusStateLabel[online="true"] {
+    background: #11b86b;
+    border: 1px solid #8df1bc;
+}
+
+QLabel#statusStateLabel[online="false"] {
+    background: #de4258;
+    border: 1px solid #ffabb6;
+}
+
+QLabel#faultText {
+    color: #a23447;
+    font-weight: 600;
+}

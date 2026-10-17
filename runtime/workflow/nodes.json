@@ -1,0 +1,75 @@
+{
+    "plc_batch":{
+        "node_id": "uuid",
+        "node_name": "PLC并发执行",
+        "type": "plc_batch",
+        "desc": "可以执行并行的plc写入操作",
+        "meta": {},
+        "args": {
+          "delay": 0,
+          "confirm": false,
+          "info":"",
+          "actlist":[
+            {"pt_name":"查表", "value": "bool/number", "reset": true}
+          ]
+        },
+        "gnode": "",
+        "next": []
+    },
+    "sys":{
+        "node_id": "uuid",
+        "node_name": "上位机指令",
+        "type": "sys",
+        "desc": "上位机指令,根据args的algo区分",
+        "meta": {},
+        "args": {
+          "delay": 0,
+          "confirm": false,
+          "info":"",
+          "algo": "wait",
+          "data":{"seconds":1}
+        },
+        "gnode": "",
+        "next": []
+    },
+    "select":{
+        "node_id": "uuid",
+        "node_name": "分支模块",
+        "type": "select",
+        "desc": "选择后续分支流程",
+        "meta": {},
+        "args": {
+          "delay": 0,
+          "confirm": false
+        },
+        "gnode": "",
+        "next": []
+    },
+    "loop_begin":{
+        "node_id": "uuid",
+        "node_name": "循环开始",
+        "type": "loop_begin",
+        "desc": "循环开始模块,需指定计数",
+        "meta": {},
+        "args": {
+          "delay": 0,
+          "confirm": false,
+          "count":1
+        },
+        "gnode": "",
+        "next": []
+    },
+    "loop_end":{
+        "node_id": "uuid",
+        "node_name": "循环结束",
+        "type": "loop_end",
+        "desc": "循环开始模块",
+        "meta": {},
+        "args": {
+          "delay": 0,
+          "confirm": false
+        },
+        "gnode": "",
+        "next": []
+    }
+}

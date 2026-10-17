@@ -1,0 +1,13 @@
+{
+    "服务器":{
+        "protocal":"mqtt",
+        "host":"192.168.1.100",
+        "port":1883,
+        "username":"admin",
+        "password":"123456",
+        "topic":"test"
+    },
+    "上传数据":{
+        "报告路径":"report/pdf"
+    }
+}

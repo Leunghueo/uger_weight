@@ -1,0 +1,1844 @@
+{
+  "id": "e1f07185-7588-4c12-b43f-d5d8448d2073",
+  "name": "新工作流",
+  "ctime": "2026-03-26T02:31:05.689Z",
+  "desc": "by工作流编辑平台",
+  "meta": {},
+  "nodes": {
+    "13556336": {
+      "node_id": "13556336",
+      "node_name": "差压1>2",
+      "type": "sys",
+      "desc": "空簧保压流程,确保在贴合状态",
+      "meta": {},
+      "args": {
+        "delay": 0,
+        "confirm": false,
+        "algo": "wait",
+        "data": {
+          "seconds": 0
+        }
+      },
+      "gnode": "gnode_701",
+      "next": [
+        "9713e12d"
+      ]
+    },
+    "68328415": {
+      "node_id": "68328415",
+      "node_name": "切换页面",
+      "type": "sys",
+      "desc": "上位机指令,根据args的algo区分",
+      "meta": {},
+      "args": {
+        "delay": 0,
+        "confirm": false,
+        "algo": "switch_tab",
+        "data": {
+          "tab": "view_airplot"
+        },
+        "gnode": ""
+      },
+      "gnode": "",
+      "next": [
+        "2f5243e0"
+      ]
+    },
+    "head": {
+      "node_id": "head",
+      "node_name": "试验开始",
+      "type": "sys",
+      "desc": "工作流开始",
+      "meta": {},
+      "args": {
+        "confirm": true,
+        "info": "请检查是否已经切换到自动模式!"
+      },
+      "gnode": "",
+      "next": [
+        "5e7133f5"
+      ]
+    },
+    "end": {
+      "node_id": "end",
+      "node_name": "试验结束",
+      "type": "sys",
+      "desc": "工作流结束",
+      "meta": {},
+      "args": {
+        "confirm": false
+      },
+      "gnode": "gnode_end",
+      "next": []
+    },
+    "d22cfa2d": {
+      "node_id": "d22cfa2d",
+      "node_name": "分支模块",
+      "type": "select",
+      "desc": "选择后续分支流程",
+      "meta": {},
+      "args": {
+        "delay": 0,
+        "confirm": false
+      },
+      "gnode": "",
+      "next": [
+        "d8ca9bae",
+        "d13c21f5",
+        "370ccadd",
+        "159a465a",
+        "75f22153",
+        "13556336",
+        "27f3ccd3",
+        "fd492ddd"
+      ]
+    },
+    "6f5fa69d": {
+      "node_id": "6f5fa69d",
+      "node_name": "启动液压系统",
+      "type": "plc_batch",
+      "desc": "可以执行并行的plc写入操作",
+      "meta": {},
+      "args": {
+        "delay": 0,
+        "confirm": false,
+        "actlist": [
+          {
+            "pt_name": "开始试验",
+            "value": true
+          },
+          {
+            "pt_name": "启动液压系统",
+            "value": true,
+            "reset": true
+          }
+        ],
+        "done_list": [
+          "启动液压系统@完成=true"
+        ]
+      },
+      "gnode": "gnode_head",
+      "next": [
+        "b85ec90e"
+      ]
+    },
+    "b85ec90e": {
+      "node_id": "b85ec90e",
+      "node_name": "建立系统压力",
+      "type": "plc_batch",
+      "desc": "可以执行并行的plc写入操作",
+      "meta": {},
+      "args": {
+        "delay": 2,
+        "confirm": false,
+        "actlist": [
+          {
+            "pt_name": "建立液压系统工作压力",
+            "value": true,
+            "reset": true
+          }
+        ],
+        "done_list": [
+          "建立液压系统工作压力@完成=true"
+        ]
+      },
+      "gnode": "",
+      "next": [
+        "8a2ec009"
+      ]
+    },
+    "2c329ea8": {
+      "node_id": "2c329ea8",
+      "node_name": "设定快进位移",
+      "type": "plc_batch",
+      "desc": "可以执行并行的plc写入操作",
+      "meta": {},
+      "args": {
+        "delay": 0,
+        "confirm": false,
+        "actlist": [
+          {
+            "pt_name": "设定加载头1快进垂向位移",
+            "value": "压头快进位置"
+          },
+          {
+            "pt_name": "设定加载头2快进垂向位移",
+            "value": "压头快进位置"
+          }
+        ]
+      },
+      "gnode": "",
+      "next": [
+        "1040f727"
+      ]
+    },
+    "1040f727": {
+      "node_id": "1040f727",
+      "node_name": "加载头快进",
+      "type": "plc_batch",
+      "desc": "可以执行并行的plc写入操作",
+      "meta": {},
+      "args": {
+        "delay": 0,
+        "confirm": true,
+        "actlist": [
+          {
+            "pt_name": "快进加载装置",
+            "value": true
+          },
+          {
+            "pt_name": "快进信息确认",
+            "value": true
+          }
+        ],
+        "done_list": [
+          "快进加载装置@完成=true",
+          "快进信息@完成@完成=true"
+        ]
+      },
+      "gnode": "gnode_2",
+      "next": [
+        "f46b4646"
+      ]
+    },
+    "75f22153": {
+      "node_id": "75f22153",
+      "node_name": "空载流程",
+      "type": "sys",
+      "desc": "均载试验流程,两侧压力一致,确保在贴合状态",
+      "meta": {},
+      "args": {
+        "delay": 0,
+        "confirm": true,
+        "algo": "wait",
+        "data": {
+          "seconds": 0
+        }
+      },
+      "gnode": "gnode_301",
+      "next": [
+        "c74e6295"
+      ]
+    },
+    "d8ca9bae": {
+      "node_id": "d8ca9bae",
+      "node_name": "反复加载流程",
+      "type": "sys",
+      "desc": "反复加载流程,循环加载5次,确保在贴合状态",
+      "meta": {},
+      "args": {
+        "delay": 0,
+        "confirm": false,
+        "algo": "wait",
+        "data": {
+          "seconds": 0
+        }
+      },
+      "gnode": "gnode_501",
+      "next": [
+        "41390fdd"
+      ]
+    },
+    "d13c21f5": {
+      "node_id": "d13c21f5",
+      "node_name": "空簧保压流程",
+      "type": "sys",
+      "desc": "空簧保压流程,确保在贴合状态",
+      "meta": {},
+      "args": {
+        "delay": 0,
+        "confirm": false,
+        "algo": "wait",
+        "data": {
+          "seconds": 0
+        }
+      },
+      "gnode": "gnode_601",
+      "next": [
+        "3d765040"
+      ]
+    },
+    "370ccadd": {
+      "node_id": "370ccadd",
+      "node_name": "结束试验",
+      "type": "sys",
+      "desc": "加载头回退,升起转向架并关闭油系统",
+      "meta": {},
+      "args": {
+        "delay": 0,
+        "confirm": true,
+        "algo": "wait",
+        "data": {
+          "seconds": 0
+        }
+      },
+      "gnode": "gnode_901",
+      "next": [
+        "1553395b"
+      ]
+    },
+    "c74e6295": {
+      "node_id": "c74e6295",
+      "node_name": "设置压力",
+      "type": "plc_batch",
+      "desc": "设置压力",
+      "meta": {},
+      "args": {
+        "delay": 0,
+        "confirm": false,
+        "actlist": [
+          {
+            "pt_name": "设定加载头1加载力",
+            "value": "空载@压力1"
+          },
+          {
+            "pt_name": "设定加载头2加载力",
+            "value": "空载@压力2"
+          }
+        ]
+      },
+      "gnode": "",
+      "next": [
+        "d3678ada"
+      ]
+    },
+    "d3678ada": {
+      "node_id": "d3678ada",
+      "node_name": "加载",
+      "type": "plc_batch",
+      "desc": "可以执行并行的plc写入操作",
+      "meta": {},
+      "args": {
+        "delay": 0,
+        "confirm": true,
+        "actlist": [
+          {
+            "pt_name": "力工进",
+            "value": true,
+            "reset": true
+          }
+        ],
+        "done_list": [
+          "力工进@完成=true"
+        ]
+      },
+      "gnode": "gnode_302",
+      "next": [
+        "5b20dd19"
+      ]
+    },
+    "09c2ecfd": {
+      "node_id": "09c2ecfd",
+      "node_name": "力工退",
+      "type": "plc_batch",
+      "desc": "可以执行并行的plc写入操作",
+      "meta": {},
+      "args": {
+        "delay": 0,
+        "confirm": false,
+        "actlist": [
+          {
+            "pt_name": "力工退",
+            "value": true,
+            "reset": true
+          }
+        ],
+        "done_list": [
+          "力工退@完成=true"
+        ]
+      },
+      "gnode": "gnode_202",
+      "next": []
+    },
+    "9d8e4484": {
+      "node_id": "9d8e4484",
+      "node_name": "循环结束",
+      "type": "loop_end",
+      "desc": "循环开始模块",
+      "meta": {},
+      "args": {
+        "delay": 0,
+        "confirm": false
+      },
+      "gnode": "",
+      "next": []
+    },
+    "3d765040": {
+      "node_id": "3d765040",
+      "node_name": "设置压力",
+      "type": "plc_batch",
+      "desc": "可以执行并行的plc写入操作",
+      "meta": {},
+      "args": {
+        "delay": 0,
+        "confirm": true,
+        "actlist": [
+          {
+            "pt_name": "设定加载头1加载力",
+            "value": "空载@压力1"
+          },
+          {
+            "pt_name": "设定加载头2加载力",
+            "value": "空载@压力2"
+          }
+        ]
+      },
+      "gnode": "",
+      "next": [
+        "3b56286b"
+      ]
+    },
+    "3b56286b": {
+      "node_id": "3b56286b",
+      "node_name": "位移工进",
+      "type": "plc_batch",
+      "desc": "可以执行并行的plc写入操作",
+      "meta": {},
+      "args": {
+        "delay": 0,
+        "confirm": true,
+        "actlist": [
+          {
+            "pt_name": "位移工进",
+            "value": true
+          }
+        ],
+        "done_list": [
+          "位移工进@完成=true"
+        ]
+      },
+      "gnode": "gonde_602",
+      "next": [
+        "1f6a8451"
+      ]
+    },
+    "1f6a8451": {
+      "node_id": "1f6a8451",
+      "node_name": "计算压磅位移",
+      "type": "sys",
+      "desc": "上位机指令,根据args的algo区分",
+      "meta": {},
+      "args": {
+        "delay": 0,
+        "confirm": true,
+        "algo": "cal_press",
+        "data": {}
+      },
+      "gnode": "",
+      "next": [
+        "78fc2645"
+      ]
+    },
+    "78fc2645": {
+      "node_id": "78fc2645",
+      "node_name": "设置空簧高度",
+      "type": "plc_batch",
+      "desc": "可以执行并行的plc写入操作",
+      "meta": {},
+      "args": {
+        "delay": 0,
+        "confirm": true,
+        "actlist": [
+          {
+            "pt_name": "设定空气弹簧工作高度",
+            "value": "压磅位移1"
+          }
+        ]
+      },
+      "gnode": "",
+      "next": [
+        "f24371d3"
+      ]
+    },
+    "f24371d3": {
+      "node_id": "f24371d3",
+      "node_name": "设置空气压力",
+      "type": "plc_batch",
+      "desc": "可以执行并行的plc写入操作",
+      "meta": {},
+      "args": {
+        "delay": 0,
+        "confirm": true,
+        "actlist": [
+          {
+            "pt_name": "设定空气弹簧充气压力",
+            "value": "空簧保压@气压"
+          }
+        ]
+      },
+      "gnode": "",
+      "next": [
+        "e34f28e6"
+      ]
+    },
+    "e34f28e6": {
+      "node_id": "e34f28e6",
+      "node_name": "充气",
+      "type": "plc_batch",
+      "desc": "可以执行并行的plc写入操作",
+      "meta": {},
+      "args": {
+        "delay": 0,
+        "confirm": true,
+        "actlist": [
+          {
+            "pt_name": "空气弹簧充气",
+            "value": true,
+            "reset": true
+          }
+        ],
+        "done_list": [
+          "空气弹簧充气@完成=true"
+        ]
+      },
+      "gnode": "gonde_603",
+      "next": [
+        "68328415"
+      ]
+    },
+    "f254cf3d": {
+      "node_id": "f254cf3d",
+      "node_name": "保压等待",
+      "type": "sys",
+      "desc": "上位机指令,根据args的algo区分",
+      "meta": {},
+      "args": {
+        "delay": 0,
+        "confirm": false,
+        "algo": "wait",
+        "data": {
+          "seconds": 60
+        }
+      },
+      "gnode": "gonde_604",
+      "next": [
+        "bfdc3b3f"
+      ]
+    },
+    "8668ddb1": {
+      "node_id": "8668ddb1",
+      "node_name": "排气",
+      "type": "plc_batch",
+      "desc": "可以执行并行的plc写入操作",
+      "meta": {},
+      "args": {
+        "delay": 0,
+        "confirm": true,
+        "actlist": [
+          {
+            "pt_name": "空气弹簧放气",
+            "value": true,
+            "reset": true
+          }
+        ],
+        "done_list": [
+          "空气弹簧放气@完成=true"
+        ]
+      },
+      "gnode": "gonde_605",
+      "next": []
+    },
+    "3695670c": {
+      "node_id": "3695670c",
+      "node_name": "设置加载头垂向位移",
+      "type": "plc_batch",
+      "desc": "可以执行并行的plc写入操作",
+      "meta": {},
+      "args": {
+        "delay": 0,
+        "confirm": true,
+        "actlist": [
+          {
+            "pt_name": "设定加载头1快进垂向位移",
+            "value": 5
+          },
+          {
+            "pt_name": "设定加载头2快进垂向位移",
+            "value": 5
+          }
+        ]
+      },
+      "gnode": "",
+      "next": [
+        "46d373a6"
+      ]
+    },
+    "e345ff46": {
+      "node_id": "e345ff46",
+      "node_name": "升起转向架",
+      "type": "plc_batch",
+      "desc": "可以执行并行的plc写入操作",
+      "meta": {},
+      "args": {
+        "delay": 0,
+        "confirm": true,
+        "actlist": [
+          {
+            "pt_name": "升起转向架",
+            "value": true,
+            "reset": true
+          }
+        ],
+        "done_list": [
+          "升起转向架@完成=true"
+        ]
+      },
+      "gnode": "gonde_903",
+      "next": [
+        "26c118f1"
+      ]
+    },
+    "6af4b3b2": {
+      "node_id": "6af4b3b2",
+      "node_name": "开启保压信号",
+      "type": "sys",
+      "desc": "上位机指令,根据args的algo区分",
+      "meta": {},
+      "args": {
+        "delay": 0,
+        "confirm": false,
+        "algo": "plot_air",
+        "data": {
+          "enabled": true,
+          "trail_type": "空簧保压"
+        }
+      },
+      "gnode": "",
+      "next": [
+        "f254cf3d"
+      ]
+    },
+    "bfdc3b3f": {
+      "node_id": "bfdc3b3f",
+      "node_name": "关闭保压信号",
+      "type": "sys",
+      "desc": "上位机指令,根据args的algo区分",
+      "meta": {},
+      "args": {
+        "delay": 0,
+        "confirm": false,
+        "algo": "plot_air",
+        "data": {
+          "enabled": false,
+          "trail_type": "空簧保压"
+        }
+      },
+      "gnode": "",
+      "next": [
+        "8668ddb1"
+      ]
+    },
+    "159a465a": {
+      "node_id": "159a465a",
+      "node_name": "满载流程",
+      "type": "sys",
+      "desc": "均载试验流程,两侧压力一致,确保在贴合状态",
+      "meta": {},
+      "args": {
+        "delay": 0,
+        "confirm": false,
+        "algo": "wait",
+        "data": {
+          "seconds": 0
+        }
+      },
+      "gnode": "gnode_401",
+      "next": [
+        "30506b1d"
+      ]
+    },
+    "5e7133f5": {
+      "node_id": "5e7133f5",
+      "node_name": "参数初始化",
+      "type": "sys",
+      "desc": "根据配置初始化试验参数",
+      "meta": {},
+      "args": {
+        "delay": 0,
+        "confirm": false,
+        "info": "",
+        "algo": "init_cal",
+        "data": {}
+      },
+      "gnode": "",
+      "next": [
+        "5b917d32"
+      ]
+    },
+    "8a2ec009": {
+      "node_id": "8a2ec009",
+      "node_name": "降下转向架",
+      "type": "plc_batch",
+      "desc": "可以执行并行的plc写入操作",
+      "meta": {},
+      "args": {
+        "delay": 0,
+        "confirm": true,
+        "info": "请确认转向架位置是否正确!",
+        "actlist": [
+          {
+            "pt_name": "确认转向架中心",
+            "value": true
+          },
+          {
+            "pt_name": "降下转向架",
+            "value": true
+          }
+        ],
+        "done_list": [
+          "降下转向架@完成=true"
+        ]
+      },
+      "gnode": "gnode_1",
+      "next": [
+        "2c329ea8"
+      ]
+    },
+    "27f3ccd3": {
+      "node_id": "27f3ccd3",
+      "node_name": "差压2>1",
+      "type": "sys",
+      "desc": "空簧保压流程,确保在贴合状态",
+      "meta": {},
+      "args": {
+        "delay": 0,
+        "confirm": false,
+        "algo": "wait",
+        "data": {
+          "seconds": 0
+        }
+      },
+      "gnode": "gnode_801",
+      "next": []
+    },
+    "f46b4646": {
+      "node_id": "f46b4646",
+      "node_name": "压头贴合",
+      "type": "plc_batch",
+      "desc": "可以执行并行的plc写入操作",
+      "meta": {},
+      "args": {
+        "delay": 3,
+        "confirm": false,
+        "actlist": [
+          {
+            "pt_name": "力贴合加载",
+            "value": true
+          }
+        ],
+        "done_list": [
+          "力贴合加载@完成=true"
+        ]
+      },
+      "gnode": "gnode_3",
+      "next": [
+        "d22cfa2d"
+      ]
+    },
+    "fd492ddd": {
+      "node_id": "fd492ddd",
+      "node_name": "卸载",
+      "type": "sys",
+      "desc": "均载试验流程,两侧压力一致,确保在贴合状态",
+      "meta": {},
+      "args": {
+        "delay": 0,
+        "confirm": true,
+        "algo": "wait",
+        "data": {
+          "seconds": 0
+        }
+      },
+      "gnode": "gnode_201",
+      "next": [
+        "5937e485"
+      ]
+    },
+    "a84fdadf": {
+      "node_id": "a84fdadf",
+      "node_name": "设置卸载压力",
+      "type": "plc_batch",
+      "desc": "设置压力",
+      "meta": {},
+      "args": {
+        "delay": 0,
+        "confirm": false,
+        "actlist": [
+          {
+            "pt_name": "设定加载头1加载力",
+            "value": "卸载压力"
+          },
+          {
+            "pt_name": "设定加载头2加载力",
+            "value": "卸载压力"
+          }
+        ]
+      },
+      "gnode": "",
+      "next": [
+        "09c2ecfd"
+      ]
+    },
+    "46d373a6": {
+      "node_id": "46d373a6",
+      "node_name": "快退",
+      "type": "plc_batch",
+      "desc": "可以执行并行的plc写入操作",
+      "meta": {},
+      "args": {
+        "delay": 0,
+        "confirm": true,
+        "actlist": [
+          {
+            "pt_name": "快退加载装置",
+            "value": true
+          }
+        ],
+        "done_list": [
+          "快退加载装置@完成=true"
+        ]
+      },
+      "gnode": "gnode_902",
+      "next": [
+        "e345ff46"
+      ]
+    },
+    "30506b1d": {
+      "node_id": "30506b1d",
+      "node_name": "设置压力",
+      "type": "plc_batch",
+      "desc": "设置压力",
+      "meta": {},
+      "args": {
+        "delay": 0,
+        "confirm": false,
+        "actlist": [
+          {
+            "pt_name": "设定加载头1加载力",
+            "value": "满载@压力1"
+          },
+          {
+            "pt_name": "设定加载头2加载力",
+            "value": "满载@压力2"
+          }
+        ]
+      },
+      "gnode": "",
+      "next": [
+        "33f67f68"
+      ]
+    },
+    "26c118f1": {
+      "node_id": "26c118f1",
+      "node_name": "清空指令",
+      "type": "plc_batch",
+      "desc": "可以执行并行的plc写入操作",
+      "meta": {},
+      "args": {
+        "delay": 0,
+        "confirm": false,
+        "actlist": [
+          {
+            "pt_name": "开始试验",
+            "value": false
+          },
+          {
+            "pt_name": "快进信息确认",
+            "value": false
+          },
+          {
+            "pt_name": "快进加载装置",
+            "value": false
+          },
+          {
+            "pt_name": "快退加载装置",
+            "value": false
+          },
+          {
+            "pt_name": "力工退",
+            "value": false
+          },
+          {
+            "pt_name": "降下转向架",
+            "value": false
+          },
+          {
+            "pt_name": "停止试验",
+            "value": true
+          }
+        ],
+        "gnode": ""
+      },
+      "gnode": "",
+      "next": [
+        "end"
+      ]
+    },
+    "56ed4d7c": {
+      "node_id": "56ed4d7c",
+      "node_name": "设置压力",
+      "type": "plc_batch",
+      "desc": "设置压力",
+      "meta": {},
+      "args": {
+        "delay": 0,
+        "confirm": false,
+        "actlist": [
+          {
+            "pt_name": "设定加载头1加载力",
+            "value": "反复空载@压力1"
+          },
+          {
+            "pt_name": "设定加载头2加载力",
+            "value": "反复空载@压力2"
+          }
+        ],
+        "gnode": ""
+      },
+      "gnode": "",
+      "next": [
+        "b3dc8132"
+      ]
+    },
+    "41390fdd": {
+      "node_id": "41390fdd",
+      "node_name": "循环开始",
+      "type": "loop_begin",
+      "desc": "循环开始模块,需指定计数",
+      "meta": {},
+      "args": {
+        "delay": 0,
+        "confirm": false,
+        "count": 3
+      },
+      "next": [
+        "56ed4d7c"
+      ],
+      "gnode": ""
+    },
+    "b3dc8132": {
+      "node_id": "b3dc8132",
+      "node_name": "空载",
+      "type": "plc_batch",
+      "desc": "可以执行并行的plc写入操作",
+      "meta": {},
+      "args": {
+        "delay": 0,
+        "confirm": false,
+        "actlist": [
+          {
+            "pt_name": "力工进",
+            "value": true,
+            "reset": true
+          }
+        ],
+        "done_list": [
+          "力工进@完成=true"
+        ]
+      },
+      "gnode": "gnode_502",
+      "next": [
+        "32bf14d4"
+      ]
+    },
+    "32bf14d4": {
+      "node_id": "32bf14d4",
+      "node_name": "设置卸载压力",
+      "type": "plc_batch",
+      "desc": "设置压力",
+      "meta": {},
+      "args": {
+        "delay": 3,
+        "confirm": false,
+        "actlist": [
+          {
+            "pt_name": "设定加载头1加载力",
+            "value": "卸载压力"
+          },
+          {
+            "pt_name": "设定加载头2加载力",
+            "value": "卸载压力"
+          }
+        ],
+        "gnode": ""
+      },
+      "gnode": "",
+      "next": [
+        "03ca5718"
+      ]
+    },
+    "03ca5718": {
+      "node_id": "03ca5718",
+      "node_name": "卸载",
+      "type": "plc_batch",
+      "desc": "可以执行并行的plc写入操作",
+      "meta": {},
+      "args": {
+        "delay": 0,
+        "confirm": false,
+        "actlist": [
+          {
+            "pt_name": "力工退",
+            "value": true,
+            "reset": true
+          }
+        ],
+        "done_list": [
+          "力工退@完成=true"
+        ]
+      },
+      "gnode": "gnode_503",
+      "next": [
+        "51e538a5"
+      ]
+    },
+    "33f67f68": {
+      "node_id": "33f67f68",
+      "node_name": "加载",
+      "type": "plc_batch",
+      "desc": "可以执行并行的plc写入操作",
+      "meta": {},
+      "args": {
+        "delay": 0,
+        "confirm": false,
+        "actlist": [
+          {
+            "pt_name": "力工进",
+            "value": true,
+            "reset": true
+          }
+        ],
+        "done_list": [
+          "力工进@完成=true"
+        ]
+      },
+      "gnode": "gnode_402",
+      "next": []
+    },
+    "5b20dd19": {
+      "node_id": "5b20dd19",
+      "node_name": "空载计算",
+      "type": "sys",
+      "desc": "上位机指令,根据args的algo区分",
+      "meta": {},
+      "args": {
+        "delay": 0,
+        "confirm": false,
+        "info": "",
+        "algo": "cal_press_trail",
+        "data": {
+          "seconds": 1
+        }
+      },
+      "next": [
+        "b816054c"
+      ],
+      "gnode": ""
+    },
+    "b816054c": {
+      "node_id": "b816054c",
+      "node_name": "显示结果",
+      "type": "sys",
+      "desc": "上位机指令,根据args的algo区分",
+      "meta": {},
+      "args": {
+        "delay": 0,
+        "confirm": false,
+        "info": "",
+        "algo": "show_result",
+        "data": {
+          "seconds": 1
+        },
+        "gnode": ""
+      },
+      "next": [],
+      "gnode": ""
+    },
+    "2f5243e0": {
+      "node_id": "2f5243e0",
+      "node_name": "回流等待",
+      "type": "sys",
+      "desc": "上位机指令,根据args的algo区分",
+      "meta": {},
+      "args": {
+        "delay": 0,
+        "confirm": false,
+        "info": "",
+        "algo": "wait",
+        "data": {
+          "seconds": 30
+        }
+      },
+      "next": [
+        "6af4b3b2"
+      ],
+      "gnode": ""
+    },
+    "9713e12d": {
+      "node_id": "9713e12d",
+      "node_name": "设置压力",
+      "type": "plc_batch",
+      "desc": "可以执行并行的plc写入操作",
+      "meta": {},
+      "args": {
+        "delay": 0,
+        "confirm": false,
+        "actlist": [
+          {
+            "pt_name": "设定加载头1加载力",
+            "value": 3200
+          },
+          {
+            "pt_name": "设定加载头2加载力",
+            "value": 3200
+          }
+        ],
+        "gnode": ""
+      },
+      "gnode": "",
+      "next": [
+        "8c9eeea4"
+      ]
+    },
+    "8c9eeea4": {
+      "node_id": "8c9eeea4",
+      "node_name": "位移工进",
+      "type": "plc_batch",
+      "desc": "可以执行并行的plc写入操作",
+      "meta": {},
+      "args": {
+        "delay": 0,
+        "confirm": false,
+        "actlist": [
+          {
+            "pt_name": "位移工进",
+            "value": true,
+            "reset": true
+          }
+        ],
+        "gnode": ""
+      },
+      "gnode": "",
+      "next": [
+        "0a90e25f"
+      ]
+    },
+    "0a90e25f": {
+      "node_id": "0a90e25f",
+      "node_name": "计算压磅位移",
+      "type": "sys",
+      "desc": "上位机指令,根据args的algo区分",
+      "meta": {},
+      "args": {
+        "delay": 0,
+        "confirm": false,
+        "algo": "cal_press",
+        "data": {},
+        "gnode": ""
+      },
+      "gnode": "",
+      "next": [
+        "9083724d"
+      ]
+    },
+    "9083724d": {
+      "node_id": "9083724d",
+      "node_name": "设置压磅位移",
+      "type": "plc_batch",
+      "desc": "可以执行并行的plc写入操作",
+      "meta": {},
+      "args": {
+        "delay": 0,
+        "confirm": false,
+        "actlist": [
+          {
+            "pt_name": "设定加载头1快进垂向位移",
+            "value": "压磅位移1"
+          },
+          {
+            "pt_name": "设定加载头2快进垂向位移",
+            "value": "压磅位移2"
+          }
+        ],
+        "gnode": ""
+      },
+      "gnode": "",
+      "next": [
+        "64c16c82"
+      ]
+    },
+    "64c16c82": {
+      "node_id": "64c16c82",
+      "node_name": "压磅",
+      "type": "plc_batch",
+      "desc": "可以执行并行的plc写入操作",
+      "meta": {},
+      "args": {
+        "delay": 0,
+        "confirm": false,
+        "actlist": [
+          {
+            "pt_name": "位移工进",
+            "value": true,
+            "reset": true
+          }
+        ],
+        "done_list": [
+          "位移工进@完成=true"
+        ],
+        "gnode": ""
+      },
+      "gnode": "",
+      "next": [
+        "4f12703a"
+      ]
+    },
+    "4f12703a": {
+      "node_id": "4f12703a",
+      "node_name": "设置空气压力",
+      "type": "plc_batch",
+      "desc": "可以执行并行的plc写入操作",
+      "meta": {},
+      "args": {
+        "delay": 0,
+        "confirm": false,
+        "actlist": [
+          {
+            "pt_name": "设定空气弹簧充气压力",
+            "value": "差压1->2@气压"
+          }
+        ],
+        "gnode": ""
+      },
+      "gnode": "",
+      "next": [
+        "6d3570d6"
+      ]
+    },
+    "6d3570d6": {
+      "node_id": "6d3570d6",
+      "node_name": "充气",
+      "type": "plc_batch",
+      "desc": "可以执行并行的plc写入操作",
+      "meta": {},
+      "args": {
+        "delay": 0,
+        "confirm": false,
+        "actlist": [
+          {
+            "pt_name": "空气弹簧充气",
+            "value": true,
+            "reset": true
+          }
+        ],
+        "gnode": ""
+      },
+      "gnode": "",
+      "next": [
+        "940b7264"
+      ]
+    },
+    "940b7264": {
+      "node_id": "940b7264",
+      "node_name": "切换页面",
+      "type": "sys",
+      "desc": "上位机指令,根据args的algo区分",
+      "meta": {},
+      "args": {
+        "delay": 0,
+        "confirm": false,
+        "algo": "switch_tab",
+        "data": {
+          "tab": "view_airplot"
+        },
+        "gnode": ""
+      },
+      "gnode": "",
+      "next": [
+        "c796c213"
+      ]
+    },
+    "a9d4ba8f": {
+      "node_id": "a9d4ba8f",
+      "node_name": "保压等待",
+      "type": "sys",
+      "desc": "上位机指令,根据args的algo区分",
+      "meta": {},
+      "args": {
+        "delay": 0,
+        "confirm": false,
+        "algo": "wait",
+        "data": {
+          "seconds": 60
+        },
+        "gnode": ""
+      },
+      "gnode": "",
+      "next": [
+        "45ad025f"
+      ]
+    },
+    "5509c349": {
+      "node_id": "5509c349",
+      "node_name": "开始保压",
+      "type": "sys",
+      "desc": "上位机指令,根据args的algo区分",
+      "meta": {},
+      "args": {
+        "delay": 0,
+        "confirm": false,
+        "algo": "plot_air",
+        "data": {
+          "enabled": true,
+          "trail_type": "差压1->2"
+        },
+        "gnode": ""
+      },
+      "gnode": "",
+      "next": [
+        "a9d4ba8f"
+      ]
+    },
+    "45ad025f": {
+      "node_id": "45ad025f",
+      "node_name": "停止保压",
+      "type": "sys",
+      "desc": "上位机指令,根据args的algo区分",
+      "meta": {},
+      "args": {
+        "delay": 0,
+        "confirm": false,
+        "algo": "plot_air",
+        "data": {
+          "enabled": false,
+          "trail_type": "差压1->2"
+        },
+        "gnode": ""
+      },
+      "gnode": "",
+      "next": []
+    },
+    "c796c213": {
+      "node_id": "c796c213",
+      "node_name": "回流等待",
+      "type": "sys",
+      "desc": "上位机指令,根据args的algo区分",
+      "meta": {},
+      "args": {
+        "delay": 0,
+        "confirm": false,
+        "info": "",
+        "algo": "wait",
+        "data": {
+          "seconds": 30
+        },
+        "gnode": ""
+      },
+      "next": [
+        "5509c349"
+      ],
+      "gnode": ""
+    },
+    "fd6f1d46": {
+      "node_id": "fd6f1d46",
+      "node_name": "设置压力",
+      "type": "plc_batch",
+      "desc": "设置压力",
+      "meta": {},
+      "args": {
+        "delay": 0,
+        "confirm": false,
+        "actlist": [
+          {
+            "pt_name": "设定加载头1加载力",
+            "value": "反复满载@压力1"
+          },
+          {
+            "pt_name": "设定加载头2加载力",
+            "value": "反复满载@压力2"
+          }
+        ],
+        "gnode": ""
+      },
+      "gnode": "",
+      "next": [
+        "18a1fc55"
+      ]
+    },
+    "18a1fc55": {
+      "node_id": "18a1fc55",
+      "node_name": "满载",
+      "type": "plc_batch",
+      "desc": "可以执行并行的plc写入操作",
+      "meta": {},
+      "args": {
+        "delay": 0,
+        "confirm": false,
+        "actlist": [
+          {
+            "pt_name": "力工进",
+            "value": true,
+            "reset": true
+          }
+        ],
+        "done_list": [
+          "力工进@完成=true"
+        ]
+      },
+      "gnode": "gnode_504",
+      "next": [
+        "e1190a0e"
+      ]
+    },
+    "e1190a0e": {
+      "node_id": "e1190a0e",
+      "node_name": "设置卸载压力",
+      "type": "plc_batch",
+      "desc": "设置压力",
+      "meta": {},
+      "args": {
+        "delay": 3,
+        "confirm": false,
+        "actlist": [
+          {
+            "pt_name": "设定加载头1加载力",
+            "value": "卸载压力"
+          },
+          {
+            "pt_name": "设定加载头2加载力",
+            "value": "卸载压力"
+          }
+        ],
+        "gnode": ""
+      },
+      "gnode": "",
+      "next": [
+        "4abe4014"
+      ]
+    },
+    "4abe4014": {
+      "node_id": "4abe4014",
+      "node_name": "卸载",
+      "type": "plc_batch",
+      "desc": "可以执行并行的plc写入操作",
+      "meta": {},
+      "args": {
+        "delay": 0,
+        "confirm": false,
+        "actlist": [
+          {
+            "pt_name": "力工退",
+            "value": true,
+            "reset": true
+          }
+        ],
+        "done_list": [
+          "力工退@完成=true"
+        ]
+      },
+      "gnode": "gnode_505",
+      "next": [
+        "74bc8e63"
+      ]
+    },
+    "1553395b": {
+      "node_id": "1553395b",
+      "node_name": "上位机指令",
+      "type": "sys",
+      "desc": "上位机指令,根据args的algo区分",
+      "meta": {},
+      "args": {
+        "delay": 0,
+        "confirm": false,
+        "info": "",
+        "algo": "summary",
+        "data": {}
+      },
+      "next": [
+        "3695670c"
+      ],
+      "gnode": ""
+    },
+    "5937e485": {
+      "node_id": "5937e485",
+      "node_name": "力工进完成清零",
+      "type": "plc_batch",
+      "desc": "可以执行并行的plc写入操作",
+      "meta": {},
+      "args": {
+        "delay": 0,
+        "confirm": false,
+        "actlist": [
+          {
+            "pt_name": "力工进@完成",
+            "value": false
+          },
+          {
+            "pt_name": "力工退@完成",
+            "value": false
+          }
+        ]
+      },
+      "gnode": "",
+      "next": [
+        "a84fdadf"
+      ]
+    },
+    "5b917d32": {
+      "node_id": "5b917d32",
+      "node_name": "PLC初始复位",
+      "type": "sys",
+      "desc": "根据配置初始化试验参数",
+      "meta": {},
+      "args": {
+        "delay": 0,
+        "confirm": false,
+        "info": "",
+        "algo": "clear_plc",
+        "data": {},
+        "gnode": ""
+      },
+      "gnode": "",
+      "next": [
+        "6f5fa69d"
+      ]
+    },
+    "51e538a5": {
+      "node_id": "51e538a5",
+      "node_name": "力工进完成清零",
+      "type": "plc_batch",
+      "desc": "可以执行并行的plc写入操作",
+      "meta": {},
+      "args": {
+        "delay": 0,
+        "confirm": false,
+        "actlist": [
+          {
+            "pt_name": "力工进@完成",
+            "value": false
+          },
+          {
+            "pt_name": "力工退@完成",
+            "value": false
+          }
+        ],
+        "gnode": ""
+      },
+      "gnode": "gnode_202",
+      "next": [
+        "fd6f1d46"
+      ]
+    },
+    "74bc8e63": {
+      "node_id": "74bc8e63",
+      "node_name": "力工进完成清零",
+      "type": "plc_batch",
+      "desc": "可以执行并行的plc写入操作",
+      "meta": {},
+      "args": {
+        "delay": 0,
+        "confirm": false,
+        "actlist": [
+          {
+            "pt_name": "力工进@完成",
+            "value": false
+          },
+          {
+            "pt_name": "力工退@完成",
+            "value": false
+          }
+        ],
+        "gnode": ""
+      },
+      "gnode": "gnode_202",
+      "next": [
+        "9d8e4484"
+      ]
+    }
+  },
+  "ui": {
+    "nodes": {
+      "13556336": {
+        "x": 2408,
+        "y": 194.4375
+      },
+      "68328415": {
+        "x": 2044,
+        "y": 1456
+      },
+      "head": {
+        "x": 224,
+        "y": 0
+      },
+      "end": {
+        "x": 2996,
+        "y": 1036
+      },
+      "d22cfa2d": {
+        "x": 700,
+        "y": 0
+      },
+      "6f5fa69d": {
+        "x": 224,
+        "y": 476
+      },
+      "b85ec90e": {
+        "x": 222.86363636363637,
+        "y": 634.909090909091
+      },
+      "2c329ea8": {
+        "x": 224,
+        "y": 952
+      },
+      "1040f727": {
+        "x": 224,
+        "y": 1120
+      },
+      "75f22153": {
+        "x": 944.5555555555557,
+        "y": 777.5277777777776
+      },
+      "d8ca9bae": {
+        "x": 1540.5,
+        "y": 491
+      },
+      "d13c21f5": {
+        "x": 2044,
+        "y": 334.4375
+      },
+      "370ccadd": {
+        "x": 2996,
+        "y": 0
+      },
+      "c74e6295": {
+        "x": 945.25,
+        "y": 949.9166666666665
+      },
+      "d3678ada": {
+        "x": 945.25,
+        "y": 1117.9166666666665
+      },
+      "09c2ecfd": {
+        "x": 632.6388888888889,
+        "y": 688.6249999999999
+      },
+      "9d8e4484": {
+        "x": 1540.5,
+        "y": 2482
+      },
+      "3d765040": {
+        "x": 2044,
+        "y": 504
+      },
+      "3b56286b": {
+        "x": 2044,
+        "y": 644
+      },
+      "1f6a8451": {
+        "x": 2044,
+        "y": 784
+      },
+      "78fc2645": {
+        "x": 2044,
+        "y": 924
+      },
+      "f24371d3": {
+        "x": 2044,
+        "y": 1092
+      },
+      "e34f28e6": {
+        "x": 2044,
+        "y": 1260
+      },
+      "f254cf3d": {
+        "x": 2044,
+        "y": 1932
+      },
+      "8668ddb1": {
+        "x": 2044,
+        "y": 2240
+      },
+      "3695670c": {
+        "x": 2996,
+        "y": 392
+      },
+      "e345ff46": {
+        "x": 2996,
+        "y": 700
+      },
+      "6af4b3b2": {
+        "x": 2044,
+        "y": 1792
+      },
+      "bfdc3b3f": {
+        "x": 2044,
+        "y": 2072
+      },
+      "159a465a": {
+        "x": 1223.5625,
+        "y": 634.625
+      },
+      "5e7133f5": {
+        "x": 224,
+        "y": 147.54545454545456
+      },
+      "8a2ec009": {
+        "x": 224,
+        "y": 783.5909090909091
+      },
+      "27f3ccd3": {
+        "x": 2716,
+        "y": 84
+      },
+      "f46b4646": {
+        "x": 224,
+        "y": 1316
+      },
+      "fd492ddd": {
+        "x": 632.2916666666666,
+        "y": 203.31944444444446
+      },
+      "a84fdadf": {
+        "x": 632.638888888889,
+        "y": 535.5555555555555
+      },
+      "46d373a6": {
+        "x": 2996,
+        "y": 532
+      },
+      "30506b1d": {
+        "x": 1223.5625,
+        "y": 830.625
+      },
+      "26c118f1": {
+        "x": 2996,
+        "y": 868
+      },
+      "56ed4d7c": {
+        "x": 1540.5,
+        "y": 809.5769230769231
+      },
+      "41390fdd": {
+        "x": 1540.5,
+        "y": 659
+      },
+      "b3dc8132": {
+        "x": 1540.5,
+        "y": 967
+      },
+      "32bf14d4": {
+        "x": 1540.5,
+        "y": 1135
+      },
+      "03ca5718": {
+        "x": 1540.5,
+        "y": 1303
+      },
+      "33f67f68": {
+        "x": 1223.5625,
+        "y": 1026.625
+      },
+      "5b20dd19": {
+        "x": 945.25,
+        "y": 1313.9166666666665
+      },
+      "b816054c": {
+        "x": 945.25,
+        "y": 1494.738095238095
+      },
+      "2f5243e0": {
+        "x": 2044,
+        "y": 1624
+      },
+      "9713e12d": {
+        "x": 2408,
+        "y": 364
+      },
+      "8c9eeea4": {
+        "x": 2408,
+        "y": 504
+      },
+      "0a90e25f": {
+        "x": 2408,
+        "y": 644
+      },
+      "9083724d": {
+        "x": 2408,
+        "y": 784
+      },
+      "64c16c82": {
+        "x": 2408,
+        "y": 924
+      },
+      "4f12703a": {
+        "x": 2408,
+        "y": 1092
+      },
+      "6d3570d6": {
+        "x": 2408,
+        "y": 1232
+      },
+      "940b7264": {
+        "x": 2408,
+        "y": 1400
+      },
+      "a9d4ba8f": {
+        "x": 2408,
+        "y": 1820
+      },
+      "5509c349": {
+        "x": 2408,
+        "y": 1680
+      },
+      "45ad025f": {
+        "x": 2408,
+        "y": 1960
+      },
+      "c796c213": {
+        "x": 2408,
+        "y": 1540
+      },
+      "fd6f1d46": {
+        "x": 1540.5,
+        "y": 1639
+      },
+      "18a1fc55": {
+        "x": 1540.5,
+        "y": 1807
+      },
+      "e1190a0e": {
+        "x": 1540.5,
+        "y": 1975
+      },
+      "4abe4014": {
+        "x": 1540.5,
+        "y": 2143
+      },
+      "1553395b": {
+        "x": 2996,
+        "y": 196
+      },
+      "5937e485": {
+        "x": 632.6388888888889,
+        "y": 370.8611111111112
+      },
+      "5b917d32": {
+        "x": 224,
+        "y": 308
+      },
+      "51e538a5": {
+        "x": 1541.75,
+        "y": 1471.5714285714287
+      },
+      "74bc8e63": {
+        "x": 1540.5,
+        "y": 2311
+      }
+    },
+    "viewport": {
+      "x": -506.4383661253204,
+      "y": -886.318128260602,
+      "zoom": 0.64
+    }
+  }
+}

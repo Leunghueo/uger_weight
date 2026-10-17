@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+
+# Runtime / local data (regenerated at runtime, do not commit)
+logs/
+runtime/db/user.db
+*.db-journal
+
+# Build artifacts (Kylin PyInstaller)
+kylin_build/
+kylin_dist/
+*.spec
+dist/
+build/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+*.swp
+.vscode/
+.idea/
