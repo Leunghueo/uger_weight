@@ -13,6 +13,7 @@ from typing import Any
 from PySide6.QtWidgets import QDialog, QVBoxLayout
 
 from _runtime import get_runtime
+from dialog_fit import FitLauncher
 
 from .dialog_about.view import Window as AboutDialog
 from .view_measure.view import MeasureView
@@ -50,6 +51,7 @@ VIEWS = {
     "view_records": {"title": "测量记录", "obj": RecordsView},
     "dialog_vsp_setting": {"title": "VSP配置", "obj": VspSetting},
     "dialog_maps_setting": {"title": "车型台位配置", "obj": MapsSetting},
+    "dialog_fit_setting": {"title": "标定设置", "obj": FitLauncher},
     "dialog_user_admin": {"title": "用户管理", "obj": UserDialog},
     "dialog_about": {"title": "关于", "obj": AboutDialog},
 }
@@ -69,6 +71,14 @@ MENUS = {
             "icon": "setting.png",
             "view_id": "dialog_maps_setting",
             "pop": False,
+            "fixed": False,
+            "admin": True,
+        },
+        {
+            "title": "标定设置",
+            "icon": "setting.png",
+            "view_id": "dialog_fit_setting",
+            "pop": True,
             "fixed": False,
             "admin": True,
         },
