@@ -15,6 +15,7 @@ from pathlib import Path
 
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import (
+    QCheckBox,
     QComboBox,
     QDialog,
     QDialogButtonBox,
@@ -48,56 +49,15 @@ from dbstore import (
 )
 from measure import PITS, apply_tare, calculate, read_platforms
 
+from .platform_cards_legacy import PlatformWidget
+from .platform_scene import PlatformSceneView, alerts_from_results
+
 logger = logging.getLogger(__name__)
 
 ALL_PLATFORMS = list(range(1, 19))
 
-
-class PlatformWidget(QWidget):
-    """单个称重台卡片：称重台X / 数值(1位小数) / kN。
-
-    样式由同目录 platform.qss 控制（独立文件，方便后期调整）。
-    """
-
-    def __init__(self, platform: int, parent: QWidget | None = None) -> None:
-        super().__init__(parent)
-        self.platform = platform
-        self.setObjectName("platformCard")
-        # QWidget 默认不按样式表绘制背景，需要这个属性
-        self.setAttribute(Qt.WA_StyledBackground, True)
-        self.setMinimumSize(92, 104)
-
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(4, 8, 4, 8)
-        layout.setSpacing(2)
-
-        self.title_label = QLabel(f"称重台{platform}")
-        self.title_label.setObjectName("platTitle")
-        self.title_label.setAlignment(Qt.AlignCenter)
-
-        self.value_label = QLabel("--")
-        self.value_label.setObjectName("platValue")
-        self.value_label.setAlignment(Qt.AlignCenter)
-
-        unit_label = QLabel("kN")
-        unit_label.setObjectName("platUnit")
-        unit_label.setAlignment(Qt.AlignCenter)
-
-        layout.addWidget(self.title_label)
-        layout.addWidget(self.value_label)
-        layout.addWidget(unit_label)
-        self.set_highlight(False)
-
-    def set_value(self, value: float | None) -> None:
-        self.value_label.setText("--" if value is None else f"{value:.1f}")
-
-    def set_highlight(self, on: bool) -> None:
-        self.setProperty("highlighted", "true" if on else "false")
-        # 动态属性变化后需要重新 polish 才能刷新样式
-        style = self.style()
-        style.unpolish(self)
-        style.polish(self)
-        self.update()
+# 场景视图开关：True=默认使用俯视示意图；False=回退旧卡片视图
+USE_SCENE_VIEW = True
 
 
 class RecordEditDialog(QDialog):
@@ -153,6 +113,7 @@ class MeasureView(QWidget):
         self._tare: dict[int, float] = {}
         self._current_id: int | None = None
         self._last_values: dict[int, float | None] = {}
+        self._platform_alerts: dict[int, str] = {}
 
         self._build_ui()
         self._refresh_models()
@@ -255,6 +216,17 @@ class MeasureView(QWidget):
         # ---- 右侧：坑位图形 + 结果 ----
         right = QVBoxLayout()
 
+        # 视图切换：俯视示意图（默认） vs 旧卡片（备份对比）
+        switch_row = QHBoxLayout()
+        switch_row.addStretch()
+        self.view_toggle = QCheckBox("俯视示意图")
+        self.view_toggle.setChecked(USE_SCENE_VIEW)
+        self.view_toggle.setToolTip("取消勾选则回退到旧版卡片视图")
+        self.view_toggle.toggled.connect(self._on_view_toggle)
+        switch_row.addWidget(self.view_toggle)
+        right.addLayout(switch_row)
+
+        # 旧卡片区（备份实现 platform_cards_legacy.py，默认隐藏）
         pits_area = QWidget()
         pits_area.setObjectName("pitsArea")
         pits_row = QHBoxLayout(pits_area)
@@ -276,7 +248,14 @@ class MeasureView(QWidget):
                 self._platform_widgets[p] = w
             pits_row.addWidget(box, len(platforms))
         pits_area.setStyleSheet(self._load_platform_qss())
-        right.addWidget(pits_area, 2)
+        self.pits_area_cards = pits_area
+        right.addWidget(pits_area, 1)
+
+        # 俯视示意图区（默认显示）
+        self.pits_scene = PlatformSceneView()
+        self.pits_scene.setObjectName("pitsScene")
+        right.addWidget(self.pits_scene, 1)
+        self._on_view_toggle(USE_SCENE_VIEW)
 
         result_box = QGroupBox("测量结果")
         result_layout = QVBoxLayout(result_box)
@@ -294,7 +273,7 @@ class MeasureView(QWidget):
         self.result_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.result_table.setEditTriggers(QTableWidget.NoEditTriggers)
         result_layout.addWidget(self.result_table, 1)
-        right.addWidget(result_box, 5)
+        right.addWidget(result_box, 1)
 
         main.addLayout(right, 1)
 
@@ -396,11 +375,18 @@ class MeasureView(QWidget):
             self._clear_results()
         self._refresh_records()
 
+    # ---------- 视图切换 ----------
+    def _on_view_toggle(self, on: bool) -> None:
+        """俯视示意图 / 旧卡片视图切换。"""
+        self.pits_scene.setVisible(on)
+        self.pits_area_cards.setVisible(not on)
+
     # ---------- 高亮 ----------
     def _apply_highlight(self) -> None:
         enabled = set(self._enabled_platforms())
         for p, w in self._platform_widgets.items():
             w.set_highlight(p in enabled)
+        self.pits_scene.set_highlight(enabled)
 
     # ---------- 实时值 ----------
     def _read_live(self) -> dict[int, float | None]:
@@ -417,6 +403,8 @@ class MeasureView(QWidget):
         shown = apply_tare(self._last_values, self._tare)
         for p, w in self._platform_widgets.items():
             w.set_value(shown.get(p))
+        self.pits_scene.set_values(shown)
+        self.pits_scene.set_alerts(self._platform_alerts)
 
     # ---------- 去皮 / 测量 ----------
     def _on_tare(self) -> None:
@@ -471,6 +459,7 @@ class MeasureView(QWidget):
         missing = [p for p in enabled if vals.get(p) is None]
         tared = apply_tare(vals, self._tare)
         results = calculate(tared, enabled, spec=self._model_spec(model))
+        self._platform_alerts = alerts_from_results(results)
         self._show_results(results)
 
         now = datetime.now().isoformat(timespec="seconds")
@@ -490,6 +479,7 @@ class MeasureView(QWidget):
 
     # ---------- 结果区 ----------
     def _clear_results(self) -> None:
+        self._platform_alerts = {}
         self.result_table.setRowCount(0)
         self.summary_label.setText("整车重: -- kN　|　轴重差: -- kN　|　结论: --")
 
