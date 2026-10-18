@@ -165,12 +165,69 @@ class MeasureView(QWidget):
 
     # ---------- 界面 ----------
     def _build_ui(self) -> None:
-        main = QHBoxLayout(self)
+        main = QVBoxLayout(self)
+        main.setContentsMargins(6, 6, 6, 6)
+        main.setSpacing(6)
 
-        # ---- 左侧：测量记录栏 ----
+        # ---- 顶部：称重台示意图（页面一级元素，占整宽） ----
+        top = QWidget()
+        top_layout = QVBoxLayout(top)
+        top_layout.setContentsMargins(0, 0, 0, 0)
+        top_layout.setSpacing(2)
+
+        # 视图切换：俯视示意图（默认） vs 旧卡片（备份对比）
+        switch_row = QHBoxLayout()
+        switch_row.setContentsMargins(0, 0, 0, 0)
+        switch_row.addStretch()
+        self.view_toggle = QCheckBox("俯视示意图")
+        self.view_toggle.setChecked(USE_SCENE_VIEW)
+        self.view_toggle.setToolTip("取消勾选则回退到旧版卡片视图")
+        self.view_toggle.toggled.connect(self._on_view_toggle)
+        switch_row.addWidget(self.view_toggle)
+        top_layout.addLayout(switch_row)
+
+        # 旧卡片区（备份实现 platform_cards_legacy.py，默认隐藏）
+        pits_area = QWidget()
+        pits_area.setObjectName("pitsArea")
+        pits_row = QHBoxLayout(pits_area)
+        pits_row.setContentsMargins(0, 0, 0, 0)
+        for pit_no, platforms in PITS.items():
+            box = QGroupBox(f"坑{pit_no}")
+            box.setObjectName("pitBox")
+            grid = QGridLayout(box)
+            grid.setSpacing(6)
+            evens = sorted(p for p in platforms if p % 2 == 0)
+            odds = sorted(p for p in platforms if p % 2 == 1)
+            for col, p in enumerate(evens):
+                w = PlatformWidget(p)
+                grid.addWidget(w, 0, col)
+                self._platform_widgets[p] = w
+            for col, p in enumerate(odds):
+                w = PlatformWidget(p)
+                grid.addWidget(w, 1, col)
+                self._platform_widgets[p] = w
+            pits_row.addWidget(box, len(platforms))
+        pits_area.setStyleSheet(self._load_platform_qss())
+        self.pits_area_cards = pits_area
+        top_layout.addWidget(pits_area, 1)
+
+        # 俯视示意图区（默认显示）
+        self.pits_scene = PlatformSceneView()
+        self.pits_scene.setObjectName("pitsScene")
+        top_layout.addWidget(self.pits_scene, 1)
+        self._on_view_toggle(USE_SCENE_VIEW)
+        main.addWidget(top, 2)
+
+        # ---- 底部：左侧测量记录栏 + 右侧测量结果 ----
+        bottom = QWidget()
+        bottom_layout = QHBoxLayout(bottom)
+        bottom_layout.setContentsMargins(0, 0, 0, 0)
+        bottom_layout.setSpacing(6)
+
         left = QWidget()
         left.setFixedWidth(300)
         left_layout = QVBoxLayout(left)
+        left_layout.setContentsMargins(0, 0, 0, 0)
 
         form = QFormLayout()
         self.model_combo = QComboBox()
@@ -211,51 +268,7 @@ class MeasureView(QWidget):
         self.record_list = QListWidget()
         self.record_list.itemClicked.connect(self._on_record_clicked)
         left_layout.addWidget(self.record_list, 1)
-        main.addWidget(left)
-
-        # ---- 右侧：坑位图形 + 结果 ----
-        right = QVBoxLayout()
-
-        # 视图切换：俯视示意图（默认） vs 旧卡片（备份对比）
-        switch_row = QHBoxLayout()
-        switch_row.addStretch()
-        self.view_toggle = QCheckBox("俯视示意图")
-        self.view_toggle.setChecked(USE_SCENE_VIEW)
-        self.view_toggle.setToolTip("取消勾选则回退到旧版卡片视图")
-        self.view_toggle.toggled.connect(self._on_view_toggle)
-        switch_row.addWidget(self.view_toggle)
-        right.addLayout(switch_row)
-
-        # 旧卡片区（备份实现 platform_cards_legacy.py，默认隐藏）
-        pits_area = QWidget()
-        pits_area.setObjectName("pitsArea")
-        pits_row = QHBoxLayout(pits_area)
-        pits_row.setContentsMargins(0, 0, 0, 0)
-        for pit_no, platforms in PITS.items():
-            box = QGroupBox(f"坑{pit_no}")
-            box.setObjectName("pitBox")
-            grid = QGridLayout(box)
-            grid.setSpacing(6)
-            evens = sorted(p for p in platforms if p % 2 == 0)
-            odds = sorted(p for p in platforms if p % 2 == 1)
-            for col, p in enumerate(evens):
-                w = PlatformWidget(p)
-                grid.addWidget(w, 0, col)
-                self._platform_widgets[p] = w
-            for col, p in enumerate(odds):
-                w = PlatformWidget(p)
-                grid.addWidget(w, 1, col)
-                self._platform_widgets[p] = w
-            pits_row.addWidget(box, len(platforms))
-        pits_area.setStyleSheet(self._load_platform_qss())
-        self.pits_area_cards = pits_area
-        right.addWidget(pits_area, 1)
-
-        # 俯视示意图区（默认显示）
-        self.pits_scene = PlatformSceneView()
-        self.pits_scene.setObjectName("pitsScene")
-        right.addWidget(self.pits_scene, 1)
-        self._on_view_toggle(USE_SCENE_VIEW)
+        bottom_layout.addWidget(left)
 
         result_box = QGroupBox("测量结果")
         result_layout = QVBoxLayout(result_box)
@@ -273,9 +286,9 @@ class MeasureView(QWidget):
         self.result_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.result_table.setEditTriggers(QTableWidget.NoEditTriggers)
         result_layout.addWidget(self.result_table, 1)
-        right.addWidget(result_box, 1)
+        bottom_layout.addWidget(result_box, 1)
 
-        main.addLayout(right, 1)
+        main.addWidget(bottom, 3)
 
     # ---------- 记录栏 ----------
     def _refresh_models(self) -> None:

@@ -278,7 +278,7 @@ class PlatformSceneView(QGraphicsView):
                 tile.setPos(sx, sy)
                 self._scene.addItem(tile)
                 self._tiles[p] = tile
-        rect = self._scene.itemsBoundingRect().adjusted(-36, -36, 36, 36)
+        rect = self._scene.itemsBoundingRect().adjusted(-12, -12, 12, 12)
         self._scene.setSceneRect(rect)
 
     # ---------- 静态背景：道砟 / 钢轨 / 坑位标签（俯视） ----------
