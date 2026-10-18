@@ -352,7 +352,8 @@ class PlatformSceneView(QGraphicsView):
     def set_values(self, values: dict[int, float | None]) -> None:
         """刷新全部台位数值；None 表示离线。"""
         for p, tile in self._tiles.items():
-            tile.set_value(values.get(p))
+            if tile.set_value(values.get(p)):
+                tile.update()  # 数值变化必须请求重绘，否则画面停留旧值
         self._values = {p: values.get(p) for p in self._tiles}
         self._apply_states(set(self._tiles))
 
