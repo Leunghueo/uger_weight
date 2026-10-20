@@ -12,13 +12,12 @@
 对外接口（与旧卡片对齐，最小侵入）：
     view.set_values({台号: kN值或None})   # None 表示离线，显示灰色"离线"
     view.set_highlight([台号, ...])        # 车型启用的台位，深橙高亮
-    view.set_alerts({台号: "warn"/"over"}) # 判定预警/超限
-    alerts_from_results(results)           # 从 measure.calculate() 结果生成 alerts
+
+本系统不做结果判定，示意图只有 正常/高亮/离线 三种状态。
 """
 from __future__ import annotations
 
 import logging
-import re
 
 from PySide6.QtCore import QRectF, Qt
 from PySide6.QtGui import (
@@ -62,12 +61,6 @@ _HL_TOP_B = "#3d2f18"
 _HL_BORDER = "#e8912d"
 _HL_TEXT = "#ffb84d"
 
-_WARN_BORDER = "#f5a623"  # 预警橙
-_OVER_TOP_A = "#4d2429"   # 超限红
-_OVER_TOP_B = "#3a1d22"
-_OVER_BORDER = "#de4258"
-_OVER_TEXT = "#ff7b8a"
-
 _OFF_TOP_A = "#2b3038"    # 离线灰
 _OFF_TOP_B = "#262b32"
 _OFF_BORDER = "#3a4049"
@@ -106,37 +99,6 @@ def _pit_layout() -> dict[int, dict]:
     return layout
 
 
-def alerts_from_results(results: dict) -> dict[int, str]:
-    """从 measure.calculate() 的结果映射 台号 -> "warn"/"over"。
-
-    只映射台位级/轴级问题（轮重、轮重差、轴重、轴重差、采集异常）；
-    整车级的车重/平衡问题不在此映射（结果区已有汇总）。
-    同一台位 over 优先于 warn。
-    """
-    alerts: dict[int, str] = {}
-    for issue in results.get("imbalance", []) or []:
-        itype = str(issue.get("type", ""))
-        detail = str(issue.get("detail", ""))
-        if itype.endswith("超限") or itype.endswith("超范围") or itype == "采集异常":
-            level = "over"
-        elif itype.endswith("偏大"):
-            level = "warn"
-        else:
-            continue
-        plats: set[int] = set()
-        m = re.search(r"称重台(\d+)", detail)
-        if m:
-            plats.add(int(m.group(1)))
-        m2 = re.search(r"轴(\d+)-(\d+)", detail)
-        if m2:
-            plats.add(int(m2.group(1)))
-            plats.add(int(m2.group(2)))
-        for p in plats:
-            if p not in alerts or level == "over":
-                alerts[p] = level
-    return alerts
-
-
 class PlatformTile(QGraphicsItem):
     """单个称重台台体（俯视圆角矩形）。本地坐标以台体中心为原点。"""
 
@@ -148,7 +110,7 @@ class PlatformTile(QGraphicsItem):
         super().__init__()
         self.platform = platform
         self._value: float | None = None
-        self._state = "normal"  # normal/highlight/warn/over/offline
+        self._state = "normal"  # normal/highlight/offline
 
     # -- 数据接口 --
     @property
@@ -178,12 +140,6 @@ class PlatformTile(QGraphicsItem):
         if s == "offline":
             return (_OFF_TOP_A, _OFF_TOP_B, _OFF_BORDER,
                     _OFF_TEXT, _OFF_TEXT, _OFF_TEXT)
-        if s == "over":
-            return (_OVER_TOP_A, _OVER_TOP_B, _OVER_BORDER,
-                    _TITLE_C, _OVER_TEXT, _UNIT_C)
-        if s == "warn":
-            return (_HL_TOP_A, _HL_TOP_B, _WARN_BORDER,
-                    _HL_TEXT, _HL_TEXT, _UNIT_C)
         if s == "highlight":
             return (_HL_TOP_A, _HL_TOP_B, _HL_BORDER,
                     _HL_TEXT, _HL_TEXT, _UNIT_C)
@@ -201,9 +157,9 @@ class PlatformTile(QGraphicsItem):
         grad.setColorAt(1.0, QColor(top_b))
         painter.setBrush(QBrush(grad))
 
-        # 边框：状态色，warn/over/highlight 加粗
+        # 边框：状态色，高亮时加粗
         pen = QPen(QColor(border_c))
-        pen.setWidthF(2.0 if self._state in ("highlight", "warn", "over") else 1.2)
+        pen.setWidthF(2.0 if self._state == "highlight" else 1.2)
         painter.setPen(pen)
         painter.drawRoundedRect(QRectF(-hw, -hh, hw * 2, hh * 2), r, r)
 
@@ -267,7 +223,6 @@ class PlatformSceneView(QGraphicsView):
         self._tiles: dict[int, PlatformTile] = {}
         self._values: dict[int, float | None] = {}
         self._highlight: set[int] = set()
-        self._alerts: dict[int, str] = {}
 
         self._build_static()
         layout = _pit_layout()
@@ -335,8 +290,6 @@ class PlatformSceneView(QGraphicsView):
         if self._values.get(p) is None and p in self._tiles:
             # 值缺失即离线（从未收到值也按离线处理，保证首屏语义明确）
             return "offline"
-        if p in self._alerts:
-            return self._alerts[p]
         if p in self._highlight:
             return "highlight"
         return "normal"
@@ -365,12 +318,3 @@ class PlatformSceneView(QGraphicsView):
         old = self._highlight
         self._highlight = new
         self._apply_states(old | new)
-
-    def set_alerts(self, alerts: dict[int, str]) -> None:
-        """设置预警/超限映射 {台号: "warn"/"over"}。"""
-        new = {p: a for p, a in alerts.items() if a in ("warn", "over")}
-        if new == self._alerts:
-            return
-        old_keys = set(self._alerts)
-        self._alerts = new
-        self._apply_states(old_keys | set(new))

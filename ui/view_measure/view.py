@@ -50,7 +50,7 @@ from dbstore import (
 from measure import PITS, apply_tare, calculate, read_platforms
 
 from .platform_cards_legacy import PlatformWidget
-from .platform_scene import PlatformSceneView, alerts_from_results
+from .platform_scene import PlatformSceneView
 
 logger = logging.getLogger(__name__)
 
@@ -127,7 +127,6 @@ class MeasureView(QWidget):
         self._tare: dict[int, float] = {}
         self._current_id: int | None = None
         self._last_values: dict[int, float | None] = {}
-        self._platform_alerts: dict[int, str] = {}
 
         self._build_ui()
         self._refresh_models()
@@ -162,10 +161,6 @@ class MeasureView(QWidget):
     def _enabled_platforms(self) -> list[int]:
         model = self.model_combo.currentText().strip()
         return list(self._maps.get(model, {}).get("称重台", ALL_PLATFORMS))
-
-    def _model_spec(self, model: str) -> dict:
-        """取车型的校验数据（用于不平衡判定）。"""
-        return self._maps.get(model, {}).get("校验数据", {}) or {}
 
     @staticmethod
     def _load_platform_qss() -> str:
@@ -286,7 +281,7 @@ class MeasureView(QWidget):
 
         result_box = QGroupBox("测量结果")
         result_layout = QVBoxLayout(result_box)
-        self.summary_label = QLabel("整车重: -- kN　|　轴重差: -- kN　|　结论: --")
+        self.summary_label = QLabel("整车重: -- kN　|　轴重差: -- kN　|　不平衡: -- kN")
         font = self.summary_label.font()
         font.setPointSize(11)
         font.setBold(True)
@@ -431,7 +426,6 @@ class MeasureView(QWidget):
         for p, w in self._platform_widgets.items():
             w.set_value(shown.get(p))
         self.pits_scene.set_values(shown)
-        self.pits_scene.set_alerts(self._platform_alerts)
 
     # ---------- 去皮 / 测量 ----------
     def _on_tare(self) -> None:
@@ -485,8 +479,7 @@ class MeasureView(QWidget):
         vals = self._read_live()
         missing = [p for p in enabled if vals.get(p) is None]
         tared = apply_tare(vals, self._tare)
-        results = calculate(tared, enabled, spec=self._model_spec(model))
-        self._platform_alerts = alerts_from_results(results)
+        results = calculate(tared, enabled)
         self._show_results(results)
 
         now = datetime.now().isoformat(timespec="seconds")
@@ -506,9 +499,8 @@ class MeasureView(QWidget):
 
     # ---------- 结果区 ----------
     def _clear_results(self) -> None:
-        self._platform_alerts = {}
         self.result_table.setRowCount(0)
-        self.summary_label.setText("整车重: -- kN　|　轴重差: -- kN　|　结论: --")
+        self.summary_label.setText("整车重: -- kN　|　轴重差: -- kN　|　不平衡: -- kN")
 
     def _show_results(self, results: dict) -> None:
         axles: dict = results.get("axles", {}) or {}
@@ -524,16 +516,8 @@ class MeasureView(QWidget):
                 item = QTableWidgetItem(str(v))
                 item.setTextAlignment(Qt.AlignCenter)
                 self.result_table.setItem(row, col, item)
-        issues = results.get("imbalance", []) or []
-        if issues:
-            conclusion = "不平衡(" + "；".join(i.get("type", "") for i in issues) + ")"
-            color = "#c0392b"
-        else:
-            conclusion = "平衡"
-            color = "#1e8e3e"
         self.summary_label.setText(
             f"整车重: {results.get('total', '--')} kN　|　"
             f"轴重差: {results.get('axle_diff', '--')} kN　|　"
-            f"结论: {conclusion}"
+            f"不平衡: {results.get('balance', '--')} kN"
         )
-        self.summary_label.setStyleSheet(f"color: {color};")

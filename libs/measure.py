@@ -14,8 +14,8 @@
     偏差   = (轮重 - 本轴平均轮重) / 本轴平均轮重 * 100%（每轮一个值，
              本轴平均轮重 = 轴重 / 2；对应 GB/T 3317 的轮重偏差口径）
     整车不平衡 = 最大轮重 - 最小轮重
-另保留轮重差/轴重差供结果表与示意图告警使用；不平衡检测（判定）
-按 maps.json 校验数据执行。
+另保留轮重差/轴重差供结果表使用。本系统只计算与呈现数值，
+不做合格/不合格判定（无结果检验）。
 """
 from __future__ import annotations
 
@@ -36,12 +36,6 @@ PITS: dict[int, list[int]] = {
 
 # 轴配对：(左轮台号, 右轮台号)
 AXLES: list[tuple[int, int]] = [(i, i + 1) for i in range(1, PLATFORM_COUNT, 2)]
-
-# 判定阈值（kN）。暂定值，后续可移到配置文件。
-THRESHOLDS: dict[str, float] = {
-    "wheel_diff": 10.0,  # 轮重差超限阈值
-    "axle_diff": 20.0,   # 轴重差超限阈值
-}
 
 UNIT = "kN"
 
@@ -87,44 +81,13 @@ def _axle_key(a: int, b: int) -> str:
     return f"{a}-{b}"
 
 
-def _spec_range(spec: dict | None, key: str) -> tuple[float, float] | None:
-    """取校验数据 [min, max]；缺失或格式不对返回 None（跳过该项校验）。"""
-    if not spec:
-        return None
-    raw = spec.get(key)
-    if not isinstance(raw, (list, tuple)) or len(raw) != 2:
-        return None
-    try:
-        return float(raw[0]), float(raw[1])
-    except (TypeError, ValueError):
-        return None
-
-
 def calculate(
     values: dict[int, float | None],
     enabled: list[int],
-    spec: dict | None = None,
 ) -> dict[str, Any]:
     """结果计算。只统计 enabled 台号；缺数的台/轴如实记录。
 
-    spec 为 maps.json 中车型的"校验数据"，格式如
-    {"轮重": [100,200], "轮重差": [10,20], "轴重": [200,400],
-     "轴重差": [10,20], "车重": [200,400], "平衡": [10,20]}。
-    判定规则：
-      轮重/轴重/车重：实测值须落在 [min, max] 内，否则记"超范围"；
-      轮重差/轴重差/平衡：[warn, limit] 两级——超过 limit 记"超限"
-        （不合格），介于 warn 与 limit 之间记"偏大"（预警，不判不合格）；
-      平衡值（整车不平衡） = 最大轮重 - 最小轮重。
-    spec 为 None 或某项缺失时，退回 THRESHOLDS 旧规则。
-
-    依据 GB/T 3317-2006 4.2.4（机车全整备状态）：
-      d) 每轮轮重与该轴两轮平均轮重之差 ≤ 轴平均轮重的 ±4%
-         → 轮重差(|左-右|) ≤ 轴平均轮重的 8%；
-      b) 每轴实际轴重与平均轴重之差 ≤ 平均轴重的 ±2%
-         → 轴重差(max-min) ≤ 平均轴重的 4%；
-      a) 机车总重允差 ±3%。
-    国标给出的是百分比准则；本函数采用 maps.json 校验数据的绝对
-    [min, max] 作为工程判定参数。
+    只做数值计算，不做合格/不合格判定（本系统无结果检验）。
     """
     enabled_set = set(enabled)
 
@@ -156,56 +119,6 @@ def calculate(
     present = [v for v in wheels.values() if v is not None]
     balance_value = round(max(present) - min(present), 3) if len(present) >= 2 else 0.0
 
-    issues: list[dict[str, str]] = []
-    failed = False
-
-    def _flag(fail: bool, issue_type: str, detail: str) -> None:
-        nonlocal failed
-        issues.append({"type": issue_type, "detail": detail})
-        if fail:
-            failed = True
-
-    def _check_range(name: str, value: float, spec_key: str, label: str) -> None:
-        """[min, max] 范围校验。"""
-        rng = _spec_range(spec, spec_key)
-        if rng is None:
-            return
-        lo, hi = rng
-        if not (lo <= value <= hi):
-            _flag(True, f"{name}超范围",
-                  f"{label}{value}{UNIT}超出[{lo:g},{hi:g}]{UNIT}")
-
-    def _check_diff(name: str, value: float, spec_key: str, label: str,
-                    legacy_key: str) -> None:
-        """差值两级校验；无 spec 时用 THRESHOLDS 单阈值。"""
-        rng = _spec_range(spec, spec_key)
-        if rng is None:
-            limit = THRESHOLDS[legacy_key]
-            if value > limit:
-                _flag(True, f"{name}超限", f"{label}{value}{UNIT}（阈值{limit:g}{UNIT}）")
-            return
-        warn, limit = rng
-        if value > limit:
-            _flag(True, f"{name}超限", f"{label}{value}{UNIT}（超限{limit:g}{UNIT}）")
-        elif value > warn:
-            _flag(False, f"{name}偏大", f"{label}{value}{UNIT}（预警{warn:g}{UNIT}）")
-
-    for p in missing:
-        _flag(True, "采集异常", f"称重台{p}无数据")
-
-    for p in sorted(enabled_set):
-        v = values.get(p)
-        if v is not None:
-            _check_range("轮重", v, "轮重", f"称重台{p}轮重")
-    for key, d in wheel_diff.items():
-        _check_diff("轮重差", d, "轮重差", f"轴{key}轮重差", "wheel_diff")
-    for key, a_val in axles.items():
-        _check_range("轴重", a_val, "轴重", f"轴{key}轴重")
-    if len(axle_values) >= 2:
-        _check_diff("轴重差", axle_diff, "轴重差", "轴重差", "axle_diff")
-    _check_range("车重", total, "车重", "整车重")
-    _check_diff("平衡", balance_value, "平衡", "整车不平衡(最大-最小轮重)", "axle_diff")
-
     return {
         "wheels": wheels,            # 台号 -> 轮重(kN)
         "wheel_diff": wheel_diff,    # "a-b" -> 轮重差(kN)
@@ -214,8 +127,6 @@ def calculate(
         "deviations": deviations,    # 台号 -> 偏差(%)，相对本轴平均轮重
         "total": total,              # 整车重(kN)
         "balance": balance_value,    # 整车不平衡 = 最大轮重 - 最小轮重(kN)
-        "imbalance": issues,         # 不平衡检测问题列表
-        "balanced": not failed,
         "missing": missing,
         "unit": UNIT,
     }

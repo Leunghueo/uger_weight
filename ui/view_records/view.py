@@ -75,13 +75,10 @@ class RecordDetailDialog(QDialog):
                 wt.setItem(row, col, item)
         layout.addWidget(wt, 1)
 
-        issues = results.get("imbalance", []) or []
-        conclusion = "平衡" if not issues else "不平衡：" + "；".join(
-            f"{i.get('type')}-{i.get('detail')}" for i in issues
-        )
         summary = QLabel(
             f"整车重: {results.get('total', '--')} kN　|　"
-            f"轴重差: {results.get('axle_diff', '--')} kN　|　结论: {conclusion}"
+            f"轴重差: {results.get('axle_diff', '--')} kN　|　"
+            f"不平衡: {results.get('balance', '--')} kN"
         )
         font = summary.font()
         font.setBold(True)
@@ -140,9 +137,9 @@ class RecordsView(QWidget):
         search_row.addStretch(1)
         layout.addLayout(search_row)
 
-        self.table = QTableWidget(0, 7)
+        self.table = QTableWidget(0, 6)
         self.table.setHorizontalHeaderLabels(
-            ["ID", "车型", "车号", "进车方向", "测量时间", "整车重(kN)", "结论"]
+            ["ID", "车型", "车号", "进车方向", "测量时间", "整车重(kN)"]
         )
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.table.setEditTriggers(QTableWidget.NoEditTriggers)
@@ -186,11 +183,9 @@ class RecordsView(QWidget):
         self.table.setRowCount(len(records))
         for row, r in enumerate(records):
             results = r.get("results_json") or {}
-            issues = results.get("imbalance", []) or []
-            conclusion = "平衡" if not issues else "不平衡"
             for col, v in enumerate(
                 [r["id"], r["model"], r["car_no"], r["serial_no"],
-                 r["measure_time"], results.get("total", ""), conclusion]
+                 r["measure_time"], results.get("total", "")]
             ):
                 item = QTableWidgetItem(str(v))
                 item.setTextAlignment(Qt.AlignCenter)

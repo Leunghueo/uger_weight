@@ -22,21 +22,7 @@ from ui.view_measure.platform_cards_legacy import PlatformWidget  # noqa: E402
 from ui.view_measure.platform_scene import (  # noqa: E402
     PlatformSceneView,
     PlatformTile,
-    alerts_from_results,
 )
-
-
-def _fake_results() -> dict:
-    """模拟 measure.calculate() 返回（含各类问题）。"""
-    return {
-        "imbalance": [
-            {"type": "轮重超范围", "detail": "称重台5轮重250.0kN超出[100,200]kN"},
-            {"type": "轮重差偏大", "detail": "轴1-2轮重差15.0kN（预警10kN）"},
-            {"type": "轮重差超限", "detail": "轴3-4轮重差25.0kN（超限20kN）"},
-            {"type": "采集异常", "detail": "称重台9无数据"},
-            {"type": "车重超范围", "detail": "整车重5000.0kN超出[200,400]kN"},
-        ],
-    }
 
 
 def main() -> None:
@@ -68,23 +54,11 @@ def main() -> None:
     assert view._tiles[5]._state == "highlight", "台5应在CRH2B内高亮"
     print("PASS 3: 车型高亮切换（18台/12台）")
 
-    # 4. alerts 映射：warn / over
-    alerts = alerts_from_results(_fake_results())
-    assert alerts.get(5) == "over", f"台5轮重超范围应为over，实际{alerts.get(5)}"
-    assert alerts.get(1) == "warn" and alerts.get(2) == "warn", "轴1-2轮重差偏大应映射台1/2为warn"
-    assert alerts.get(3) == "over" and alerts.get(4) == "over", "轴3-4轮重差超限应映射台3/4为over"
-    assert alerts.get(9) == "over", "台9采集异常应为over"
-    assert "车重超范围" not in str(alerts), "整车级问题不应映射到单台"
-    view.set_alerts(alerts)
-    assert view._tiles[5]._state == "over"
-    assert view._tiles[1]._state == "warn"
-    assert view._tiles[9]._state == "offline", "台9无值，离线优先于采集异常告警"
-    print("PASS 4: 预警/超限映射与着色")
-
-    # 5. 告警清除后回落
-    view.set_alerts({})
-    assert view._tiles[5]._state == "highlight", "清除告警后台5应回落为高亮"
-    print("PASS 5: 告警清除状态回落")
+    # 4. 无结果判定：视图只有 正常/高亮/离线 三种状态
+    assert not hasattr(view, "set_alerts"), "判定告警接口应已移除"
+    states = {t._state for t in view._tiles.values()}
+    assert states <= {"normal", "highlight", "offline"}, states
+    print("PASS 4: 无判定告警，状态仅 正常/高亮/离线")
 
     # 6. 渲染不崩：grab + 缩放
     view.resize(1200, 400)
@@ -110,12 +84,11 @@ def main() -> None:
     assert w.value_label.text() == "123.4"
     print("PASS 7: 旧卡片备份模块可用")
 
-    # 8. 空值/边界：全部 None、全空 alerts
+    # 8. 空值/边界：全部 None、空高亮
     view.set_values({})
     assert all(t._state == "offline" for t in view._tiles.values())
     view.set_values(values)
     view.set_highlight([])
-    view.set_alerts({"99": "over", "1": "bogus"})  # 非法台号/非法等级应被忽略
     assert view._tiles[1]._state == "normal"
     print("PASS 8: 边界输入鲁棒")
 
