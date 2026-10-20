@@ -15,7 +15,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from PySide6.QtCore import QPointF, Qt, QRectF, QLocale
+from PySide6.QtCore import QPointF, Qt, QRectF, QLocale, QTimer
 from PySide6.QtGui import QColor, QDoubleValidator, QPainter, QPen
 from PySide6.QtWidgets import (
     QAbstractItemView,
@@ -167,6 +167,7 @@ class Window(QDialog):
         self.name_label = QLabel(self.pt_name, info_card)
         self.addr_label = QLabel(self._point_address(), info_card)
         self.unit_label = QLabel(self._point_obj.unit or "-", info_card)
+        self.raw_label = QLabel("-", info_card)
         self.add_edit = QLineEdit(info_card)
         self.add_edit.setPlaceholderText("0")
         self.add_validator = QDoubleValidator(-100000.0, 100000.0, 3, self.add_edit)
@@ -185,6 +186,7 @@ class Window(QDialog):
         form.addRow("名称:", self.name_label)
         form.addRow("地址:", self.addr_label)
         form.addRow("单位:", self.unit_label)
+        form.addRow("实时采集值:", self.raw_label)
         form.addRow("偏移(add):", add_layout)
         info_layout.addLayout(form)
         root.addWidget(info_card)
@@ -245,6 +247,19 @@ class Window(QDialog):
         footer.addWidget(self.save_btn)
         root.addLayout(footer)
 
+        # 回车默认添加标定点（方便连续标定），避免误触标零
+        self.add_btn.setDefault(True)
+        self.zero_btn.setAutoDefault(False)
+        self.remove_btn.setAutoDefault(False)
+        self.save_btn.setAutoDefault(False)
+
+        # 实时采集值刷新（500ms）
+        self._live_timer = QTimer(self)
+        self._live_timer.setInterval(500)
+        self._live_timer.timeout.connect(self._refresh_live_raw)
+        self._refresh_live_raw()
+        self._live_timer.start()
+
     def _point_address(self) -> str:
         assert self._raw_point is not None
         return str(self._raw_point.get("port") or self._raw_point.get("addr") or "-")
@@ -289,6 +304,16 @@ class Window(QDialog):
 
     def _current_point_add(self) -> float:
         return float(self._point_obj.config.add or 0.0)
+
+    def _refresh_live_raw(self) -> None:
+        raw = self._point_obj.raw_value if self._point_obj is not None else None
+        text = "-" if raw is None else f"{raw:g}"
+        if self.raw_label.text() != text:
+            self.raw_label.setText(text)
+
+    def closeEvent(self, event) -> None:  # type: ignore[override]
+        self._live_timer.stop()
+        super().closeEvent(event)
 
     def _on_zero_btn_clicked(self) -> None:
         table = self.runtime["vsp"]
