@@ -74,9 +74,9 @@ _OFF_BORDER = "#3a4049"
 _OFF_TEXT = "#79828d"
 
 # ---------- 俯视正投影 ----------
-_CW = 120.0     # 网格列宽（场景 px）
-_CH = 96.0      # 网格行高（场景 px）
-_PIT_GAP = 1.4  # 坑间距（格）
+_CW = 124.0     # 网格列宽（场景 px）
+_CH = 104.0     # 网格行高（场景 px）
+_PIT_GAP = 1.0  # 坑间距（格）
 
 
 def _proj(gx: float, gy: float) -> tuple[float, float]:
@@ -140,8 +140,8 @@ def alerts_from_results(results: dict) -> dict[int, str]:
 class PlatformTile(QGraphicsItem):
     """单个称重台台体（俯视圆角矩形）。本地坐标以台体中心为原点。"""
 
-    _W2 = 52.0   # 台体半宽
-    _H2 = 38.0   # 台体半高
+    _W2 = 56.0   # 台体半宽
+    _H2 = 44.0   # 台体半高
     _RADIUS = 10.0  # 圆角半径
 
     def __init__(self, platform: int) -> None:
@@ -170,7 +170,7 @@ class PlatformTile(QGraphicsItem):
 
     # -- 绘制 --
     def boundingRect(self) -> QRectF:  # type: ignore[override]
-        return QRectF(-60, -46, 120, 92)
+        return QRectF(-64, -52, 128, 104)
 
     def _palette(self) -> tuple[str, str, str, str, str, str]:
         """(渐变起, 渐变止, 边框, 标题色, 数值色, 单位色)。"""
@@ -289,9 +289,9 @@ class PlatformSceneView(QGraphicsView):
             cols = layout[pit_no]["cols"]
             x1 = x0 + cols
 
-            # 道砟底座：圆角矩形
-            bx0, by0 = _proj(x0 - 0.7, -0.75)
-            bx1, by1 = _proj(x1 + 0.7, 2.75)
+            # 道砟底座：圆角矩形（收紧轨道外侧留空）
+            bx0, by0 = _proj(x0 - 0.4, -0.32)
+            bx1, by1 = _proj(x1 + 0.4, 2.32)
             self._scene.addRect(
                 QRectF(bx0, by0, bx1 - bx0, by1 - by0),
                 QPen(QColor(_BALLAST_BORDER), 2),
@@ -300,8 +300,8 @@ class PlatformSceneView(QGraphicsView):
 
             # 两条钢轨（沿行进方向 gx 的水平线），先画宽深色底再画窄亮色面
             for gy in (0.5, 1.5):
-                x1s, y1s = _proj(x0 - 0.5, gy)
-                x2s, y2s = _proj(x1 + 0.5, gy)
+                x1s, y1s = _proj(x0 - 0.3, gy)
+                x2s, y2s = _proj(x1 + 0.3, gy)
                 for width, color in ((10, _RAIL_DARK), (4, _RAIL_LIGHT)):
                     line = QGraphicsLineItem(x1s, y1s, x2s, y2s)
                     pen = QPen(QColor(color))
@@ -317,7 +317,7 @@ class PlatformSceneView(QGraphicsView):
             font.setBold(True)
             label.setFont(font)
             label.setBrush(QBrush(QColor(_PIT_LABEL_C)))
-            lx, ly = _proj(x0 + cols / 2.0, -1.05)
+            lx, ly = _proj(x0 + cols / 2.0, -0.24)
             label.setPos(lx - label.boundingRect().width() / 2, ly)
             self._scene.addItem(label)
 
