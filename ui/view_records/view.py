@@ -46,7 +46,7 @@ class RecordDetailDialog(QDialog):
         info = QFormLayout()
         info.addRow("车型", QLabel(str(record.get("model", ""))))
         info.addRow("车号", QLabel(str(record.get("car_no", ""))))
-        info.addRow("编号", QLabel(str(record.get("serial_no", ""))))
+        info.addRow("进车方向", QLabel(str(record.get("serial_no", ""))))
         info.addRow("测量时间", QLabel(str(record.get("measure_time", ""))))
         info.addRow("备注", QLabel(str(record.get("note", ""))))
         layout.addLayout(info)
@@ -142,7 +142,7 @@ class RecordsView(QWidget):
 
         self.table = QTableWidget(0, 7)
         self.table.setHorizontalHeaderLabels(
-            ["ID", "车型", "车号", "编号", "测量时间", "整车重(kN)", "结论"]
+            ["ID", "车型", "车号", "进车方向", "测量时间", "整车重(kN)", "结论"]
         )
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.table.setEditTriggers(QTableWidget.NoEditTriggers)
@@ -229,7 +229,10 @@ class RecordsView(QWidget):
             return
         try:
             template, outdir = self._report_paths()
-            pdf_path = export_measure_pdf(record, template, outdir)
+            pdf_path = export_measure_pdf(
+                record, template, outdir,
+                operator=str(self.runtime.get("current_user", "") or ""),
+            )
         except Exception as exc:
             logger.exception("导出PDF失败")
             QMessageBox.warning(self, "导出PDF", f"导出失败：{exc}")
@@ -247,7 +250,8 @@ class RecordsView(QWidget):
             template, _ = self._report_paths()
             tmpdir = Path(tempfile.gettempdir())
             pdf_path = export_measure_pdf(
-                record, template, tmpdir, filename=f"measure_{record['id']}.pdf"
+                record, template, tmpdir, filename=f"measure_{record['id']}.pdf",
+                operator=str(self.runtime.get("current_user", "") or ""),
             )
         except Exception as exc:
             logger.exception("生成打印PDF失败")

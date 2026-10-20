@@ -1,4 +1,4 @@
-"""称重测量：VSP 采集 + 去皮 + 六项结果计算.
+"""称重测量：VSP 采集 + 去皮 + 结果计算.
 
 坑位布局（固定硬件，见 UI 手绘图）::
     坑1: 台 1-6    （下排奇数 1,3,5 / 上排偶数 2,4,6）
@@ -7,8 +7,15 @@
 
 轴 = 同一轴左右两轮，即 (奇数, 偶数) 配对：(1,2),(3,4),...,(17,18)。
 
-计算项（暂定，后续可扩展）:
-    轮重, 轮重差, 轴重, 轴重差, 整车重, 不平衡检测
+计算规则:
+    轮重   = 传感器读数（经 segs 分段标定 + add 偏移换算后）
+    轴重   = 相邻两轮重之和（1+2 / 3+4 / ...）
+    整车重 = 所有轮重之和
+    偏差   = (轮重 - 本轴平均轮重) / 本轴平均轮重 * 100%（每轮一个值，
+             本轴平均轮重 = 轴重 / 2；对应 GB/T 3317 的轮重偏差口径）
+    整车不平衡 = 最大轮重 - 最小轮重
+另保留轮重差/轴重差供结果表与示意图告警使用；不平衡检测（判定）
+按 maps.json 校验数据执行。
 """
 from __future__ import annotations
 
@@ -98,7 +105,7 @@ def calculate(
     enabled: list[int],
     spec: dict | None = None,
 ) -> dict[str, Any]:
-    """六项计算。只统计 enabled 台号；缺数的台/轴如实记录。
+    """结果计算。只统计 enabled 台号；缺数的台/轴如实记录。
 
     spec 为 maps.json 中车型的"校验数据"，格式如
     {"轮重": [100,200], "轮重差": [10,20], "轴重": [200,400],
@@ -107,7 +114,7 @@ def calculate(
       轮重/轴重/车重：实测值须落在 [min, max] 内，否则记"超范围"；
       轮重差/轴重差/平衡：[warn, limit] 两级——超过 limit 记"超限"
         （不合格），介于 warn 与 limit 之间记"偏大"（预警，不判不合格）；
-      平衡值 = |左侧(单数号台)总重 - 右侧(偶数号台)总重|。
+      平衡值（整车不平衡） = 最大轮重 - 最小轮重。
     spec 为 None 或某项缺失时，退回 THRESHOLDS 旧规则。
 
     依据 GB/T 3317-2006 4.2.4（机车全整备状态）：
@@ -126,6 +133,7 @@ def calculate(
 
     wheel_diff: dict[str, float] = {}
     axles: dict[str, float] = {}
+    deviations: dict[str, float] = {}
     for a, b in AXLES:
         if a not in enabled_set or b not in enabled_set:
             continue
@@ -135,16 +143,18 @@ def calculate(
         key = _axle_key(a, b)
         wheel_diff[key] = round(abs(va - vb), 3)
         axles[key] = round(va + vb, 3)
+        # 偏差(%)：每轮相对本轴平均轮重（轴重/2）的偏差
+        avg = (va + vb) / 2.0
+        if avg:
+            deviations[str(a)] = round((va - avg) / avg * 100.0, 2)
+            deviations[str(b)] = round((vb - avg) / avg * 100.0, 2)
 
     axle_values = list(axles.values())
     axle_diff = round(max(axle_values) - min(axle_values), 3) if len(axle_values) >= 2 else 0.0
     total = round(sum(v for v in wheels.values() if v is not None), 3)
-    # 平衡值 = |左侧(单数号台)总重 - 右侧(偶数号台)总重|
-    left_total = sum(v for p, v in values.items()
-                     if p in enabled_set and p % 2 == 1 and v is not None)
-    right_total = sum(v for p, v in values.items()
-                      if p in enabled_set and p % 2 == 0 and v is not None)
-    balance_value = round(abs(left_total - right_total), 3)
+    # 整车不平衡 = 最大轮重 - 最小轮重
+    present = [v for v in wheels.values() if v is not None]
+    balance_value = round(max(present) - min(present), 3) if len(present) >= 2 else 0.0
 
     issues: list[dict[str, str]] = []
     failed = False
@@ -194,15 +204,16 @@ def calculate(
     if len(axle_values) >= 2:
         _check_diff("轴重差", axle_diff, "轴重差", "轴重差", "axle_diff")
     _check_range("车重", total, "车重", "整车重")
-    _check_diff("平衡", balance_value, "平衡", "平衡值(|左-右|)", "axle_diff")
+    _check_diff("平衡", balance_value, "平衡", "整车不平衡(最大-最小轮重)", "axle_diff")
 
     return {
         "wheels": wheels,            # 台号 -> 轮重(kN)
         "wheel_diff": wheel_diff,    # "a-b" -> 轮重差(kN)
         "axles": axles,              # "a-b" -> 轴重(kN)
         "axle_diff": axle_diff,      # 轴重差(kN)
+        "deviations": deviations,    # 台号 -> 偏差(%)，相对本轴平均轮重
         "total": total,              # 整车重(kN)
-        "balance": balance_value,    # 平衡值 = |左侧(单数号)总重 - 右侧(偶数号)总重|(kN)
+        "balance": balance_value,    # 整车不平衡 = 最大轮重 - 最小轮重(kN)
         "imbalance": issues,         # 不平衡检测问题列表
         "balanced": not failed,
         "missing": missing,

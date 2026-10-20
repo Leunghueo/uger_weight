@@ -59,9 +59,22 @@ ALL_PLATFORMS = list(range(1, 19))
 # 场景视图开关：True=默认使用俯视示意图；False=回退旧卡片视图
 USE_SCENE_VIEW = True
 
+# 进车方向固定选项（原"编号"字段，现存入 serial_no 列）
+DIRECTIONS = ["一轴向西", "一轴向东"]
+
+
+def _set_combo_value(combo: QComboBox, value: str) -> None:
+    """设置下拉框的值；不在固定选项中（如旧记录的历史文本）时临时加入以便显示。"""
+    idx = combo.findText(value)
+    if idx < 0 and value:
+        combo.addItem(value)
+        idx = combo.count() - 1
+    if idx >= 0:
+        combo.setCurrentIndex(idx)
+
 
 class RecordEditDialog(QDialog):
-    """新建/编辑记录：车型 / 车号 / 编号 / 备注。"""
+    """新建/编辑记录：车型 / 车号 / 进车方向 / 备注。"""
 
     def __init__(self, models: list[str], record: dict | None = None, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -71,7 +84,8 @@ class RecordEditDialog(QDialog):
         self.model_combo = QComboBox()
         self.model_combo.addItems(models)
         self.car_edit = QLineEdit()
-        self.serial_edit = QLineEdit()
+        self.direction_combo = QComboBox()
+        self.direction_combo.addItems(DIRECTIONS)
         self.note_edit = QTextEdit()
         self.note_edit.setMaximumHeight(60)
 
@@ -80,13 +94,13 @@ class RecordEditDialog(QDialog):
             if idx >= 0:
                 self.model_combo.setCurrentIndex(idx)
             self.car_edit.setText(str(record.get("car_no", "")))
-            self.serial_edit.setText(str(record.get("serial_no", "")))
+            _set_combo_value(self.direction_combo, str(record.get("serial_no", "")))
             self.note_edit.setPlainText(str(record.get("note", "")))
 
         form = QFormLayout(self)
         form.addRow("车型", self.model_combo)
         form.addRow("车号", self.car_edit)
-        form.addRow("编号", self.serial_edit)
+        form.addRow("进车方向", self.direction_combo)
         form.addRow("备注", self.note_edit)
 
         buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
@@ -98,7 +112,7 @@ class RecordEditDialog(QDialog):
         return {
             "model": self.model_combo.currentText().strip(),
             "car_no": self.car_edit.text().strip(),
-            "serial_no": self.serial_edit.text().strip(),
+            "serial_no": self.direction_combo.currentText().strip(),
             "note": self.note_edit.toPlainText().strip(),
         }
 
@@ -234,11 +248,11 @@ class MeasureView(QWidget):
         self.model_combo.currentTextChanged.connect(self._apply_highlight)
         self.car_edit = QLineEdit()
         self.car_edit.setPlaceholderText("手动输入")
-        self.serial_edit = QLineEdit()
-        self.serial_edit.setPlaceholderText("手动输入")
+        self.direction_combo = QComboBox()
+        self.direction_combo.addItems(DIRECTIONS)
         form.addRow("车型", self.model_combo)
         form.addRow("车号", self.car_edit)
-        form.addRow("编号", self.serial_edit)
+        form.addRow("进车方向", self.direction_combo)
         left_layout.addLayout(form)
 
         btn_row1 = QHBoxLayout()
@@ -328,7 +342,7 @@ class MeasureView(QWidget):
         if idx >= 0:
             self.model_combo.setCurrentIndex(idx)
         self.car_edit.setText(record["car_no"])
-        self.serial_edit.setText(record["serial_no"])
+        _set_combo_value(self.direction_combo, record["serial_no"])
         tare = record.get("tare_json") or {}
         self._tare = {int(k): float(v) for k, v in tare.items()}
         results = record.get("results_json") or {}
@@ -345,7 +359,7 @@ class MeasureView(QWidget):
             if idx >= 0:
                 dlg.model_combo.setCurrentIndex(idx)
         dlg.car_edit.setText(self.car_edit.text())
-        dlg.serial_edit.setText(self.serial_edit.text())
+        _set_combo_value(dlg.direction_combo, self.direction_combo.currentText())
         if dlg.exec() != QDialog.Accepted:
             return
         d = dlg.data()
