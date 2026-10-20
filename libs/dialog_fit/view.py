@@ -370,5 +370,5 @@ class Window(QDialog):
         # update_by_id 会替换点位换算参数, 刷新引用避免后续标零用旧参数
         self._point_obj = table.points.get(self.pt_name, self._point_obj)
 
+        # 保存后不关闭窗口，便于继续调整/反复标定
         QMessageBox.information(self, "保存成功", "segs 已写回配置文件并更新全局对象。")
-        self.accept()
