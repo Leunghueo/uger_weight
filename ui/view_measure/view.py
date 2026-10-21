@@ -47,7 +47,14 @@ from dbstore import (
     update_measure_meta,
     update_measure_tare,
 )
-from measure import PITS, apply_tare, calculate, read_platforms
+from measure import (
+    PITS,
+    apply_tare,
+    calculate,
+    read_platforms,
+    results_from_report,
+    to_report_data,
+)
 
 from .platform_cards_legacy import PlatformWidget
 from .platform_scene import PlatformSceneView
@@ -59,7 +66,7 @@ ALL_PLATFORMS = list(range(1, 19))
 # 场景视图开关：True=默认使用俯视示意图；False=回退旧卡片视图
 USE_SCENE_VIEW = True
 
-# 进车方向固定选项（原"编号"字段，现存入 serial_no 列）
+# 进车方向固定选项（存入 direction 列）
 DIRECTIONS = ["一轴向西", "一轴向东"]
 
 
@@ -94,7 +101,7 @@ class RecordEditDialog(QDialog):
             if idx >= 0:
                 self.model_combo.setCurrentIndex(idx)
             self.car_edit.setText(str(record.get("car_no", "")))
-            _set_combo_value(self.direction_combo, str(record.get("serial_no", "")))
+            _set_combo_value(self.direction_combo, str(record.get("direction", "")))
             self.note_edit.setPlainText(str(record.get("note", "")))
 
         form = QFormLayout(self)
@@ -112,7 +119,7 @@ class RecordEditDialog(QDialog):
         return {
             "model": self.model_combo.currentText().strip(),
             "car_no": self.car_edit.text().strip(),
-            "serial_no": self.direction_combo.currentText().strip(),
+            "direction": self.direction_combo.currentText().strip(),
             "note": self.note_edit.toPlainText().strip(),
         }
 
@@ -315,7 +322,7 @@ class MeasureView(QWidget):
             records = []
         self.record_list.clear()
         for r in records:
-            text = f"#{r['id']} {r['model']} {r['car_no']} {r['serial_no']}".strip()
+            text = f"#{r['id']} {r['model']} {r['car_no']} {r['direction']}".strip()
             if r.get("measure_time"):
                 text += f"  {r['measure_time']}"
             item = QListWidgetItem(text)
@@ -337,10 +344,10 @@ class MeasureView(QWidget):
         if idx >= 0:
             self.model_combo.setCurrentIndex(idx)
         self.car_edit.setText(record["car_no"])
-        _set_combo_value(self.direction_combo, record["serial_no"])
-        tare = record.get("tare_json") or {}
+        _set_combo_value(self.direction_combo, record["direction"])
+        tare = record.get("tare") or {}
         self._tare = {int(k): float(v) for k, v in tare.items()}
-        results = record.get("results_json") or {}
+        results = results_from_report(record.get("wheels"), record.get("platforms"))
         if results:
             self._show_results(results)
         else:
@@ -363,7 +370,7 @@ class MeasureView(QWidget):
             return
         rid = insert_measure(
             self._db_path, model=d["model"], car_no=d["car_no"],
-            serial_no=d["serial_no"], note=d["note"],
+            direction=d["direction"], note=d["note"],
         )
         self._current_id = rid
         self._tare = {}
@@ -380,7 +387,7 @@ class MeasureView(QWidget):
             return
         d = dlg.data()
         update_measure_meta(self._db_path, rid, model=d["model"], car_no=d["car_no"],
-                            serial_no=d["serial_no"], note=d["note"])
+                            direction=d["direction"], note=d["note"])
         self._refresh_records()
 
     def _on_delete(self) -> None:
@@ -483,13 +490,17 @@ class MeasureView(QWidget):
         self._show_results(results)
 
         now = datetime.now().isoformat(timespec="seconds")
+        data = to_report_data(results)
         save_measure_result(
             self._db_path, rid,
             measure_time=now,
+            operator=str(get_runtime().get("current_user", "") or ""),
             platforms=enabled,
             tare={str(k): v for k, v in self._tare.items()},
-            values={str(k): (None if v is None else v) for k, v in tared.items()},
-            results=results,
+            wheels=data["wheels"],
+            axles=data["axles"],
+            total_kg=data["total_kg"],
+            balance_kg=data["balance_kg"],
         )
         self._refresh_records()
         if missing:

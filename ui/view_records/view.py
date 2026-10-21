@@ -29,6 +29,7 @@ from PySide6.QtWidgets import (
 
 from _runtime import get_runtime
 from dbstore import get_measure, list_measures
+from measure import KN_TO_KG, results_from_report
 from reporting import export_measure_pdf
 
 logger = logging.getLogger(__name__)
@@ -46,12 +47,12 @@ class RecordDetailDialog(QDialog):
         info = QFormLayout()
         info.addRow("车型", QLabel(str(record.get("model", ""))))
         info.addRow("车号", QLabel(str(record.get("car_no", ""))))
-        info.addRow("进车方向", QLabel(str(record.get("serial_no", ""))))
+        info.addRow("进车方向", QLabel(str(record.get("direction", ""))))
         info.addRow("测量时间", QLabel(str(record.get("measure_time", ""))))
         info.addRow("备注", QLabel(str(record.get("note", ""))))
         layout.addLayout(info)
 
-        results = record.get("results_json") or {}
+        results = results_from_report(record.get("wheels"), record.get("platforms")) or {}
         wheels = results.get("wheels", {}) or {}
         wheel_diff = results.get("wheel_diff", {}) or {}
         axles = results.get("axles", {}) or {}
@@ -182,10 +183,11 @@ class RecordsView(QWidget):
             records = []
         self.table.setRowCount(len(records))
         for row, r in enumerate(records):
-            results = r.get("results_json") or {}
+            total_kg = r.get("total_kg")
+            total = round(total_kg / KN_TO_KG, 2) if isinstance(total_kg, (int, float)) else ""
             for col, v in enumerate(
-                [r["id"], r["model"], r["car_no"], r["serial_no"],
-                 r["measure_time"], results.get("total", "")]
+                [r["id"], r["model"], r["car_no"], r["direction"],
+                 r["measure_time"], total]
             ):
                 item = QTableWidgetItem(str(v))
                 item.setTextAlignment(Qt.AlignCenter)
@@ -219,7 +221,7 @@ class RecordsView(QWidget):
         record = self._selected_record()
         if not record:
             return
-        if not (record.get("results_json") or {}).get("wheels"):
+        if record.get("total_kg") is None:
             QMessageBox.warning(self, "提示", "该记录尚未测量，无结果可导出")
             return
         try:
@@ -238,7 +240,7 @@ class RecordsView(QWidget):
         record = self._selected_record()
         if not record:
             return
-        if not (record.get("results_json") or {}).get("wheels"):
+        if record.get("total_kg") is None:
             QMessageBox.warning(self, "提示", "该记录尚未测量，无内容可打印")
             return
         try:

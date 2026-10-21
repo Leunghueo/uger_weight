@@ -39,6 +39,9 @@ AXLES: list[tuple[int, int]] = [(i, i + 1) for i in range(1, PLATFORM_COUNT, 2)]
 
 UNIT = "kN"
 
+# 报告（abc.xlsx 模板）以 kg 呈现，存储结构与模板一致，单位为 kg
+KN_TO_KG = 1000.0 / 9.80665
+
 
 def platform_point_name(platform: int) -> str:
     """台号 -> VSP 点位名（对应 vsp.json 的 pts 键）。"""
@@ -130,3 +133,76 @@ def calculate(
         "missing": missing,
         "unit": UNIT,
     }
+
+
+# ---------------------------------------------------------------------------
+# 存储结构（与报告模板 abc.xlsx 1:1 对应，单位 kg）
+#   轮数据: [{"轮号": 1..18, "轮重(kg)": 数值或"", "偏差(%)": 数值或""}, ...]
+#   轴数据: [{"轴号": 1..9,  "轴重(kg)": 数值或""}, ...]
+#   整车重(kg) / 不平衡检测(kg): 数值或 None
+# ---------------------------------------------------------------------------
+
+def report_skeleton() -> dict[str, Any]:
+    """未测量记录的空结构：18 轮 / 9 轴占位，数值为空串。"""
+    return {
+        "wheels": [{"轮号": i, "轮重(kg)": "", "偏差(%)": ""}
+                   for i in range(1, PLATFORM_COUNT + 1)],
+        "axles": [{"轴号": k, "轴重(kg)": ""} for k in range(1, len(AXLES) + 1)],
+        "total_kg": None,
+        "balance_kg": None,
+    }
+
+
+def to_report_data(results: dict[str, Any] | None) -> dict[str, Any]:
+    """calculate() 的结果（kN）-> 存储/报告结构（kg）。
+
+    未启用或缺数的轮/轴数值留空串；无结果时等同 report_skeleton()。
+    """
+    results = results or {}
+    wheels_kn: dict[str, Any] = results.get("wheels") or {}
+    deviations: dict[str, Any] = results.get("deviations") or {}
+    axles_kn: dict[str, Any] = results.get("axles") or {}
+
+    wheels = []
+    for p in range(1, PLATFORM_COUNT + 1):
+        v = wheels_kn.get(str(p))
+        wheels.append({
+            "轮号": p,
+            "轮重(kg)": round(float(v) * KN_TO_KG, 1) if v is not None else "",
+            "偏差(%)": deviations.get(str(p), ""),
+        })
+    axles = []
+    for k, (a, b) in enumerate(AXLES, start=1):
+        v = axles_kn.get(_axle_key(a, b))
+        axles.append({
+            "轴号": k,
+            "轴重(kg)": round(float(v) * KN_TO_KG, 1) if v is not None else "",
+        })
+    total = results.get("total")
+    balance = results.get("balance")
+    return {
+        "wheels": wheels,
+        "axles": axles,
+        "total_kg": round(float(total) * KN_TO_KG, 1) if wheels_kn and total is not None else None,
+        "balance_kg": round(float(balance) * KN_TO_KG, 1) if wheels_kn and balance is not None else None,
+    }
+
+
+def results_from_report(
+    wheels: list[dict[str, Any]] | None,
+    platforms: list[int] | None = None,
+) -> dict[str, Any] | None:
+    """存储结构（kg）-> calculate() 结果形状（kN），供页面结果表展示。
+
+    由轮重反算各台读数后走 calculate()，保证派生量（轮重差/轴重差/
+    偏差）与测量当时的口径一致。无任何轮重数据时返回 None。
+    """
+    values: dict[int, float | None] = {}
+    for entry in wheels or []:
+        v = entry.get("轮重(kg)")
+        if isinstance(v, (int, float)):
+            values[int(entry["轮号"])] = round(float(v) / KN_TO_KG, 3)
+    if not values:
+        return None
+    enabled = list(platforms) if platforms else sorted(values)
+    return calculate(values, enabled)

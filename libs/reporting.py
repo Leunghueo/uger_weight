@@ -12,25 +12,20 @@
     B26        不平衡检测(kg)（值填 D26，D26:E26 合并；= 最大轮重-最小轮重）
 
 模板缺失时用 openpyxl 按同一版式生成（兜底，版式与 abc.xlsx 一致）。
-数值单位换算：系统内轮重为 kN，报告按模板以 kg 呈现，
-kg = kN * 1000 / 9.80665。偏差为相对量，不受单位影响。
+数据库存储结构与模板 1:1 对应（见 dbstore），轮/轴/整车重/不平衡
+均以 kg 存库，导出时直接填入，不再做结构转换与单位换算。
 """
 from __future__ import annotations
 
-import json
 import logging
 from pathlib import Path
 from typing import Any
 
+from measure import KN_TO_KG  # noqa: F401  （兼容旧引用；换算系数定义在 measure）
+
 logger = logging.getLogger(__name__)
 
 TEMPLATE_SHEET = "report"
-
-KN_TO_KG = 1000.0 / 9.80665
-
-
-def _kg(v: float | None) -> float | str:
-    return "" if v is None else round(v * KN_TO_KG, 1)
 
 
 def ensure_measure_template(template_path: str | Path) -> Path:
@@ -101,63 +96,37 @@ def ensure_measure_template(template_path: str | Path) -> Path:
     return template_path
 
 
-def _results_of(record: dict[str, Any]) -> dict[str, Any]:
-    results = record.get("results_json") or {}
-    if isinstance(results, str):
-        results = json.loads(results)
-    return results
-
-
-def _deviations(wheels: dict[str, Any]) -> dict[str, float]:
-    """由轮重现算每轮偏差(%)（旧记录未存 deviations 时兜底）。"""
-    devs: dict[str, float] = {}
-    for k in range(9):
-        a, b = str(2 * k + 1), str(2 * k + 2)
-        va, vb = wheels.get(a), wheels.get(b)
-        if va is None or vb is None:
-            continue
-        avg = (float(va) + float(vb)) / 2.0
-        if avg:
-            devs[a] = round((float(va) - avg) / avg * 100.0, 2)
-            devs[b] = round((float(vb) - avg) / avg * 100.0, 2)
-    return devs
+def _num(v: Any) -> float | str:
+    """存储值 -> 单元格值：数值原样，空串/None 保持空白。"""
+    return round(float(v), 2) if isinstance(v, (int, float)) else ""
 
 
 def build_measure_cells(record: dict[str, Any], operator: str = "") -> dict[str, Any]:
-    """记录 -> {单元格引用: 值}，供 PdfReport.set_cells 使用（abc.xlsx 版式）。"""
-    results = _results_of(record)
-    wheels: dict[str, Any] = results.get("wheels", {}) or {}
-    axles: dict[str, Any] = results.get("axles", {}) or {}
-    deviations: dict[str, Any] = results.get("deviations") or _deviations(wheels)
+    """记录 -> {单元格引用: 值}，供 PdfReport.set_cells 使用（abc.xlsx 版式）。
 
+    记录的存储结构与模板 1:1 对应（轮数据/轴数据/整车重/不平衡均为
+    kg），本函数只做单元格定位，不做结构转换与单位换算。操作者优先
+    用记录自带的（测量时落库），为空时用调用方传入的当前用户兜底。
+    """
     cells: dict[str, Any] = {
-        "C3": operator,
+        "C3": record.get("operator") or operator,
         "E3": record.get("measure_time", ""),
         "C4": record.get("model", ""),
         "E4": record.get("car_no", ""),
-        "C5": record.get("serial_no", ""),  # 进车方向
+        "C5": record.get("direction", ""),  # 进车方向
     }
-    for i in range(18):
-        p = str(i + 1)
-        r = 7 + i
-        v = wheels.get(p)
-        cells[f"C{r}"] = _kg(float(v)) if v is not None else ""
-        d = deviations.get(p)
-        cells[f"D{r}"] = round(float(d), 2) if d is not None else ""
-    for k in range(9):
-        key = f"{2 * k + 1}-{2 * k + 2}"
-        v = axles.get(key)
-        cells[f"E{7 + 2 * k}"] = _kg(float(v)) if v is not None else ""
+    for entry in record.get("wheels") or []:
+        r = 6 + int(entry["轮号"])
+        cells[f"C{r}"] = _num(entry.get("轮重(kg)"))
+        cells[f"D{r}"] = _num(entry.get("偏差(%)"))
+    for entry in record.get("axles") or []:
+        v = entry.get("轴重(kg)")
+        cells[f"E{7 + 2 * (int(entry['轴号']) - 1)}"] = _num(v)
 
-    total = results.get("total")
-    cells["D25"] = _kg(float(total)) if total is not None else ""
-    # 不平衡检测 = 最大轮重 - 最小轮重；优先由轮重现算，保证口径一致
-    present = [float(v) for v in wheels.values() if v is not None]
-    if len(present) >= 2:
-        balance = max(present) - min(present)
-    else:
-        balance = results.get("balance")
-    cells["D26"] = _kg(float(balance)) if balance is not None else ""
+    total = record.get("total_kg")
+    cells["D25"] = round(float(total), 1) if isinstance(total, (int, float)) else ""
+    balance = record.get("balance_kg")
+    cells["D26"] = round(float(balance), 1) if isinstance(balance, (int, float)) else ""
     return cells
 
 
