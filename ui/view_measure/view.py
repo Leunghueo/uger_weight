@@ -47,6 +47,7 @@ from dbstore import (
     update_measure_meta,
     update_measure_tare,
 )
+from results_table import clear_results_table, fill_results_table, make_results_table
 from measure import (
     PITS,
     apply_tare,
@@ -295,12 +296,7 @@ class MeasureView(QWidget):
         self.summary_label.setFont(font)
         result_layout.addWidget(self.summary_label)
 
-        self.result_table = QTableWidget(0, 7)
-        self.result_table.setHorizontalHeaderLabels(
-            ["轴", "左轮台", "右轮台", "轮重左(kN)", "轮重右(kN)", "轮重差(kN)", "轴重(kN)"]
-        )
-        self.result_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
-        self.result_table.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.result_table = make_results_table()
         result_layout.addWidget(self.result_table, 1)
         bottom_layout.addWidget(result_box, 1)
 
@@ -510,23 +506,11 @@ class MeasureView(QWidget):
 
     # ---------- 结果区 ----------
     def _clear_results(self) -> None:
-        self.result_table.setRowCount(0)
+        clear_results_table(self.result_table)
         self.summary_label.setText("整车重: -- kN　|　轴重差: -- kN　|　不平衡: -- kN")
 
     def _show_results(self, results: dict) -> None:
-        axles: dict = results.get("axles", {}) or {}
-        wheel_diff: dict = results.get("wheel_diff", {}) or {}
-        wheels: dict = results.get("wheels", {}) or {}
-        self.result_table.setRowCount(len(axles))
-        for row, key in enumerate(sorted(axles.keys(), key=lambda k: int(k.split("-")[0]))):
-            a, b = key.split("-")
-            vals = [key, a, b,
-                    f"{wheels.get(a, '')}", f"{wheels.get(b, '')}",
-                    f"{wheel_diff.get(key, '')}", f"{axles[key]}"]
-            for col, v in enumerate(vals):
-                item = QTableWidgetItem(str(v))
-                item.setTextAlignment(Qt.AlignCenter)
-                self.result_table.setItem(row, col, item)
+        fill_results_table(self.result_table, results)
         self.summary_label.setText(
             f"整车重: {results.get('total', '--')} kN　|　"
             f"轴重差: {results.get('axle_diff', '--')} kN　|　"

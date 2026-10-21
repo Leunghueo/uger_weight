@@ -31,6 +31,7 @@ from _runtime import get_runtime
 from dbstore import get_measure, list_measures
 from measure import KN_TO_KG, results_from_report
 from reporting import export_measure_pdf
+from results_table import fill_results_table, make_results_table
 
 logger = logging.getLogger(__name__)
 
@@ -53,27 +54,9 @@ class RecordDetailDialog(QDialog):
         layout.addLayout(info)
 
         results = results_from_report(record.get("wheels"), record.get("platforms")) or {}
-        wheels = results.get("wheels", {}) or {}
-        wheel_diff = results.get("wheel_diff", {}) or {}
-        axles = results.get("axles", {}) or {}
 
-        wt = QTableWidget(0, 7)
-        wt.setHorizontalHeaderLabels(
-            ["轴", "左轮台", "右轮台", "轮重左(kN)", "轮重右(kN)", "轮重差(kN)", "轴重(kN)"]
-        )
-        wt.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
-        wt.setEditTriggers(QTableWidget.NoEditTriggers)
-        keys = sorted(axles.keys(), key=lambda k: int(k.split("-")[0]))
-        wt.setRowCount(len(keys))
-        for row, key in enumerate(keys):
-            a, b = key.split("-")
-            for col, v in enumerate(
-                [key, a, b, wheels.get(a, ""), wheels.get(b, ""),
-                 wheel_diff.get(key, ""), axles[key]]
-            ):
-                item = QTableWidgetItem(str(v))
-                item.setTextAlignment(Qt.AlignCenter)
-                wt.setItem(row, col, item)
+        wt = make_results_table()
+        fill_results_table(wt, results)
         layout.addWidget(wt, 1)
 
         summary = QLabel(
