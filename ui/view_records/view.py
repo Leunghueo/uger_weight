@@ -29,7 +29,7 @@ from PySide6.QtWidgets import (
 
 from _runtime import get_runtime
 from dbstore import get_measure, list_measures
-from measure import KN_TO_KG, results_from_report
+from measure import results_from_report
 from reporting import export_measure_pdf
 from results_table import fill_results_table, make_results_table
 
@@ -60,9 +60,9 @@ class RecordDetailDialog(QDialog):
         layout.addWidget(wt, 1)
 
         summary = QLabel(
-            f"整车重: {results.get('total', '--')} kN　|　"
-            f"轴重差: {results.get('axle_diff', '--')} kN　|　"
-            f"不平衡: {results.get('balance', '--')} kN"
+            f"整车重: {results.get('total', '--')} kg　|　"
+            f"轴重差: {results.get('axle_diff', '--')} kg　|　"
+            f"不平衡: {results.get('balance', '--')} kg"
         )
         font = summary.font()
         font.setBold(True)
@@ -123,7 +123,7 @@ class RecordsView(QWidget):
 
         self.table = QTableWidget(0, 6)
         self.table.setHorizontalHeaderLabels(
-            ["ID", "车型", "车号", "进车方向", "测量时间", "整车重(kN)"]
+            ["ID", "车型", "车号", "进车方向", "测量时间", "整车重(kg)"]
         )
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.table.setEditTriggers(QTableWidget.NoEditTriggers)
@@ -167,7 +167,7 @@ class RecordsView(QWidget):
         self.table.setRowCount(len(records))
         for row, r in enumerate(records):
             total_kg = r.get("total_kg")
-            total = round(total_kg / KN_TO_KG, 2) if isinstance(total_kg, (int, float)) else ""
+            total = round(total_kg, 1) if isinstance(total_kg, (int, float)) else ""
             for col, v in enumerate(
                 [r["id"], r["model"], r["car_no"], r["direction"],
                  r["measure_time"], total]

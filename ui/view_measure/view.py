@@ -55,6 +55,7 @@ from measure import (
     read_platforms,
     results_from_report,
     to_report_data,
+    values_to_kg,
 )
 
 from .platform_cards_legacy import PlatformWidget
@@ -289,7 +290,7 @@ class MeasureView(QWidget):
 
         result_box = QGroupBox("测量结果")
         result_layout = QVBoxLayout(result_box)
-        self.summary_label = QLabel("整车重: -- kN　|　轴重差: -- kN　|　不平衡: -- kN")
+        self.summary_label = QLabel("整车重: -- kg　|　轴重差: -- kg　|　不平衡: -- kg")
         font = self.summary_label.font()
         font.setPointSize(11)
         font.setBold(True)
@@ -482,10 +483,10 @@ class MeasureView(QWidget):
         vals = self._read_live()
         missing = [p for p in enabled if vals.get(p) is None]
         tared = apply_tare(vals, self._tare)
-        results = calculate(tared, enabled)
+        results = calculate(values_to_kg(tared), enabled)  # kN->kg：测量时换算
         self._show_results(results)
 
-        now = datetime.now().isoformat(timespec="seconds")
+        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         data = to_report_data(results)
         save_measure_result(
             self._db_path, rid,
@@ -507,12 +508,12 @@ class MeasureView(QWidget):
     # ---------- 结果区 ----------
     def _clear_results(self) -> None:
         clear_results_table(self.result_table)
-        self.summary_label.setText("整车重: -- kN　|　轴重差: -- kN　|　不平衡: -- kN")
+        self.summary_label.setText("整车重: -- kg　|　轴重差: -- kg　|　不平衡: -- kg")
 
     def _show_results(self, results: dict) -> None:
         fill_results_table(self.result_table, results)
         self.summary_label.setText(
-            f"整车重: {results.get('total', '--')} kN　|　"
-            f"轴重差: {results.get('axle_diff', '--')} kN　|　"
-            f"不平衡: {results.get('balance', '--')} kN"
+            f"整车重: {results.get('total', '--')} kg　|　"
+            f"轴重差: {results.get('axle_diff', '--')} kg　|　"
+            f"不平衡: {results.get('balance', '--')} kg"
         )

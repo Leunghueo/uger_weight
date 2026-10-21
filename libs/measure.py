@@ -37,9 +37,9 @@ PITS: dict[int, list[int]] = {
 # 轴配对：(左轮台号, 右轮台号)
 AXLES: list[tuple[int, int]] = [(i, i + 1) for i in range(1, PLATFORM_COUNT, 2)]
 
-UNIT = "kN"
+# 采集值为 kN；测量时换算为 kg，结果/存储/报告统一为 kg
+UNIT = "kg"
 
-# 报告（abc.xlsx 模板）以 kg 呈现，存储结构与模板一致，单位为 kg
 KN_TO_KG = 1000.0 / 9.80665
 
 
@@ -78,6 +78,14 @@ def apply_tare(values: dict[int, float | None], tare: dict[int, float] | None) -
         t = tare.get(p, 0.0) or 0.0
         result[p] = round(v - t, 3) if v is not None else None
     return result
+
+
+def values_to_kg(values: dict[int, float | None]) -> dict[int, float | None]:
+    """采集值 kN -> kg（测量时换算，结果与记录统一为 kg）。"""
+    return {
+        p: (None if v is None else round(float(v) * KN_TO_KG, 3))
+        for p, v in values.items()
+    }
 
 
 def _axle_key(a: int, b: int) -> str:
@@ -123,13 +131,13 @@ def calculate(
     balance_value = round(max(present) - min(present), 3) if len(present) >= 2 else 0.0
 
     return {
-        "wheels": wheels,            # 台号 -> 轮重(kN)
-        "wheel_diff": wheel_diff,    # "a-b" -> 轮重差(kN)
-        "axles": axles,              # "a-b" -> 轴重(kN)
-        "axle_diff": axle_diff,      # 轴重差(kN)
+        "wheels": wheels,            # 台号 -> 轮重(kg)
+        "wheel_diff": wheel_diff,    # "a-b" -> 轮重差(kg)
+        "axles": axles,              # "a-b" -> 轴重(kg)
+        "axle_diff": axle_diff,      # 轴重差(kg)
         "deviations": deviations,    # 台号 -> 偏差(%)，相对本轴平均轮重
-        "total": total,              # 整车重(kN)
-        "balance": balance_value,    # 整车不平衡 = 最大轮重 - 最小轮重(kN)
+        "total": total,              # 整车重(kg)
+        "balance": balance_value,    # 整车不平衡 = 最大轮重 - 最小轮重(kg)
         "missing": missing,
         "unit": UNIT,
     }
@@ -154,37 +162,38 @@ def report_skeleton() -> dict[str, Any]:
 
 
 def to_report_data(results: dict[str, Any] | None) -> dict[str, Any]:
-    """calculate() 的结果（kN）-> 存储/报告结构（kg）。
+    """calculate() 的结果（kg，测量时已换算）-> 存储/报告结构。
 
-    未启用或缺数的轮/轴数值留空串；无结果时等同 report_skeleton()。
+    仅做结构转换，不再换算单位。未启用或缺数的轮/轴数值留空串；
+    无结果时等同 report_skeleton()。
     """
     results = results or {}
-    wheels_kn: dict[str, Any] = results.get("wheels") or {}
+    wheels_in: dict[str, Any] = results.get("wheels") or {}
     deviations: dict[str, Any] = results.get("deviations") or {}
-    axles_kn: dict[str, Any] = results.get("axles") or {}
+    axles_in: dict[str, Any] = results.get("axles") or {}
 
     wheels = []
     for p in range(1, PLATFORM_COUNT + 1):
-        v = wheels_kn.get(str(p))
+        v = wheels_in.get(str(p))
         wheels.append({
             "轮号": p,
-            "轮重(kg)": round(float(v) * KN_TO_KG, 1) if v is not None else "",
+            "轮重(kg)": round(float(v), 1) if v is not None else "",
             "偏差(%)": deviations.get(str(p), ""),
         })
     axles = []
     for k, (a, b) in enumerate(AXLES, start=1):
-        v = axles_kn.get(_axle_key(a, b))
+        v = axles_in.get(_axle_key(a, b))
         axles.append({
             "轴号": k,
-            "轴重(kg)": round(float(v) * KN_TO_KG, 1) if v is not None else "",
+            "轴重(kg)": round(float(v), 1) if v is not None else "",
         })
     total = results.get("total")
     balance = results.get("balance")
     return {
         "wheels": wheels,
         "axles": axles,
-        "total_kg": round(float(total) * KN_TO_KG, 1) if wheels_kn and total is not None else None,
-        "balance_kg": round(float(balance) * KN_TO_KG, 1) if wheels_kn and balance is not None else None,
+        "total_kg": round(float(total), 1) if wheels_in and total is not None else None,
+        "balance_kg": round(float(balance), 1) if wheels_in and balance is not None else None,
     }
 
 
@@ -192,16 +201,16 @@ def results_from_report(
     wheels: list[dict[str, Any]] | None,
     platforms: list[int] | None = None,
 ) -> dict[str, Any] | None:
-    """存储结构（kg）-> calculate() 结果形状（kN），供页面结果表展示。
+    """存储结构（kg）-> calculate() 结果形状（kg），供页面结果表展示。
 
-    由轮重反算各台读数后走 calculate()，保证派生量（轮重差/轴重差/
+    由轮重还原各台数值后走 calculate()，保证派生量（轮重差/轴重差/
     偏差）与测量当时的口径一致。无任何轮重数据时返回 None。
     """
     values: dict[int, float | None] = {}
     for entry in wheels or []:
         v = entry.get("轮重(kg)")
         if isinstance(v, (int, float)):
-            values[int(entry["轮号"])] = round(float(v) / KN_TO_KG, 3)
+            values[int(entry["轮号"])] = round(float(v), 3)
     if not values:
         return None
     enabled = list(platforms) if platforms else sorted(values)

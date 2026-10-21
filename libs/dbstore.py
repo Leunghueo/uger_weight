@@ -20,7 +20,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from measure import report_skeleton, to_report_data
+from measure import KN_TO_KG, report_skeleton, to_report_data
 
 CREATE_USER_SQL = """
 CREATE TABLE IF NOT EXISTS TblUser(
@@ -80,7 +80,22 @@ def _migrate_old_measure_table(conn: sqlite3.Connection) -> None:
     conn.execute(f"CREATE TABLE TblMeasure_new({_MEASURE_COLUMNS})")
     for row in old_rows:
         results = _loads(row["results_json"], {})
-        data = to_report_data(results if isinstance(results, dict) else {})
+        if isinstance(results, dict):
+            # 旧版结果为 kN，迁移时换算为 kg（新版测量已在测量时换算）
+            results = {
+                **results,
+                "wheels": {k: (None if v is None else float(v) * KN_TO_KG)
+                           for k, v in (results.get("wheels") or {}).items()},
+                "axles": {k: float(v) * KN_TO_KG
+                          for k, v in (results.get("axles") or {}).items()},
+                "total": (None if results.get("total") is None
+                          else float(results["total"]) * KN_TO_KG),
+                "balance": (None if results.get("balance") is None
+                            else float(results["balance"]) * KN_TO_KG),
+            }
+        else:
+            results = {}
+        data = to_report_data(results)
         conn.execute(
             """
             INSERT INTO TblMeasure_new
@@ -126,8 +141,9 @@ def init_db(db_path: str | Path) -> Path:
     return db_path
 
 
-def _now_iso() -> str:
-    return datetime.now().isoformat(timespec="seconds")
+def _now_str() -> str:
+    """本地时间，格式 2026-10-21 20:10:21。"""
+    return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
 
 def insert_measure(
@@ -154,13 +170,13 @@ def insert_measure(
             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
             """,
             (
-                operator, measure_time or _now_iso(), model, car_no, direction,
+                operator, measure_time or _now_str(), model, car_no, direction,
                 json.dumps(skeleton["wheels"], ensure_ascii=False),
                 json.dumps(skeleton["axles"], ensure_ascii=False),
                 None, None,
                 json.dumps(platforms or [], ensure_ascii=False),
                 json.dumps(tare or {}, ensure_ascii=False),
-                note, _now_iso(),
+                note, _now_str(),
             ),
         )
         conn.commit()

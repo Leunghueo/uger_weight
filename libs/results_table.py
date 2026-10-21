@@ -2,7 +2,7 @@
 
 结构：先「轮数据」18 行（轮号/轮重/偏差%），再「轴数据」9 行
 （轴号/轴重）。未启用或缺数的轮/轴保留行、值留空，与报告一致。
-程序内单位为 kN；报告（abc.xlsx）为 kg。
+采集值为 kN，测量时换算为 kg；展示与报告（abc.xlsx）统一为 kg。
 """
 from __future__ import annotations
 
@@ -18,9 +18,9 @@ _ROW_HEIGHT = 20
 
 
 def make_results_table() -> QTableWidget:
-    """创建分段结果表（3 列：编号/重量(kN)/偏差(%)）。"""
+    """创建分段结果表（3 列：编号/重量(kg)/偏差(%)）。"""
     table = QTableWidget(0, 3)
-    table.setHorizontalHeaderLabels(["编号", "重量(kN)", "偏差(%)"])
+    table.setHorizontalHeaderLabels(["编号", "重量(kg)", "偏差(%)"])
     table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
     table.setEditTriggers(QTableWidget.NoEditTriggers)
     table.verticalHeader().setVisible(False)
