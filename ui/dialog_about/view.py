@@ -18,7 +18,7 @@ from PySide6.QtWidgets import (
 )
 
 
-APP_NAME = "XLT静载实验台上位机程序"
+APP_NAME = "车辆称重程序"
 APP_VERSION = "1.0.0"
 
 
@@ -79,7 +79,7 @@ class Window(QDialog):
         root.addWidget(separator)
 
         description = QLabel(
-            "用于 XLT 静载实验台的数据采集、试验流程控制、设备状态监控与参数配置。",
+            "用于车辆称重设备的上位机程序",
             self,
         )
         description.setWordWrap(True)

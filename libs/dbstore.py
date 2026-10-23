@@ -2,12 +2,16 @@
 
 表:
     TblUser    - 登录用户（沿用旧结构）
-    TblMeasure - 测量记录，结构与报告模板 abc.xlsx 1:1 对应：
+    TblMeasure - 测量记录，结构与报告模板 abc.xlsx 对应：
         operator 操作者 / measure_time 时间 / model 车型 / car_no 车号 /
-        direction 进车方向 / wheels_json 轮数据(18) / axles_json 轴数据(9) /
+        direction 进车方向 / wheels_json 轮数据 / axles_json 轴数据 /
         total_kg 整车重(kg) / balance_kg 不平衡检测(kg)，另 platforms
         启用台号、tare_json 去皮量为流程数据。轮/轴数据字段名与模板
         一致（轮号/轮重(kg)/偏差(%)/轴号/轴重(kg)），单位 kg。
+
+轮/轴的行数由车型决定（见 runtime/device/maps.json 的 车型->轴->轮
+三层结构），不再固定 18 轮 / 9 轴；轮数据另带 台号/轮别/轴号，用于
+回溯"当时每个轮子读的是哪个台"。
 
 旧库（serial_no/values_json/results_json 结构）会在 init_db 时
 自动迁移：进车方向取原 serial_no，轮/轴数据由旧结果换算（kN->kg）。
@@ -20,7 +24,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from measure import report_skeleton, to_report_data
+from measure import to_report_data
 
 CREATE_USER_SQL = """
 CREATE TABLE IF NOT EXISTS TblUser(
@@ -141,9 +145,14 @@ def insert_measure(
     platforms: list[int] | None = None,
     tare: dict | None = None,
     note: str = "",
+    wheels: list | None = None,
+    axles: list | None = None,
 ) -> int:
-    """新建未测量记录：轮/轴数据为空结构，整车重/不平衡为 NULL。"""
-    skeleton = report_skeleton()
+    """新建未测量记录：轮/轴数据为空结构，整车重/不平衡为 NULL。
+
+    wheels/axles 由调用方按 车型+进车方向 生成（measure.report_skeleton），
+    行数随车型变化；不传则存空列表。
+    """
     with sqlite3.connect(db_path) as conn:
         cur = conn.execute(
             """
@@ -155,8 +164,8 @@ def insert_measure(
             """,
             (
                 operator, measure_time or _now_iso(), model, car_no, direction,
-                json.dumps(skeleton["wheels"], ensure_ascii=False),
-                json.dumps(skeleton["axles"], ensure_ascii=False),
+                json.dumps(wheels or [], ensure_ascii=False),
+                json.dumps(axles or [], ensure_ascii=False),
                 None, None,
                 json.dumps(platforms or [], ensure_ascii=False),
                 json.dumps(tare or {}, ensure_ascii=False),
@@ -195,11 +204,14 @@ def list_measures(
         if car_no:
             where.append("car_no LIKE ?")
             params.append(f"%{car_no}%")
+        # 时间列存在过两种写法：ISO（2026-10-23T21:05:41 / 2026-10-23 21:05:41）
+        # 与旧版两位年（26-10-23 21:05:41）。后者 date() 解析为 NULL，
+        # 用 '20' 前缀兜底，保证按日期检索不丢旧记录。
         if date_from:
-            where.append("date(measure_time) >= date(?)")
+            where.append("COALESCE(date(measure_time), date('20' || measure_time)) >= date(?)")
             params.append(date_from)
         if date_to:
-            where.append("date(measure_time) <= date(?)")
+            where.append("COALESCE(date(measure_time), date('20' || measure_time)) <= date(?)")
             params.append(date_to)
         params.append(limit)
         rows = conn.execute(

@@ -1,19 +1,21 @@
 """测量报告：把测量记录填充到 xlsx 报告模板，再转 PDF。
 
-报告模板为 runtime/pdf/abc.xlsx（用户提供），工作表 "report"，版式：
-    B2:E2      标题：称重测量报告
-    B3/C3      操作者 | D3/E3 时间
-    B4/C4      车型   | D4/E4 车号
-    B5         进车方向（值填 C5，C5:E5 合并）
-    B6:E6      表头：轮号 | 轮重(kg) | 偏差(%) | 轴重(kg)
-    B7:B24     轮号 1-18；C 列轮重(kg)；D 列偏差(%)；
-               E 列轴重(kg)（E7:E8、E9:E10 … 两行合并为一轴）
-    B25        整车重(kg)（值填 D25，D25:E25 合并）
-    B26        不平衡检测(kg)（值填 D26，D26:E26 合并；= 最大轮重-最小轮重）
+报告模板为 runtime/pdf/abc.xlsx（用户提供），工作表 "report"，版式
+（每轴一行，与界面结果表、库结构一致，单位 kg）：
+    B2:G2      标题：称重测量报告
+    B3 操作者（值 C3，C3:D3 合并） | E3 时间（值 F3，F3:G3 合并）
+    B4 车型  （值 C4，C4:D4 合并） | E4 车号（值 F4，F4:G4 合并）
+    B5         进车方向（值填 C5）
+    B6:G6      表头：轴号 | 轴重/kg | 轮重(左)/kg | 轮重偏差(左) |
+                     轮重(右)/kg | 轮重偏差(右)
+    B7:B15     轴号 1-9；C 轴重(kg)；D/E 左轮重(kg)/偏差(%)；
+               F/G 右轮重(kg)/偏差(%)
+    B16        整车重(kg)（值填 D16，B16:C16、D16:G16 合并）
+    B17        不平衡检测(kg)（值填 D17，B17:C17、D17:G17 合并）
 
 模板缺失时用 openpyxl 按同一版式生成（兜底，版式与 abc.xlsx 一致）。
-数据库存储结构与模板 1:1 对应（见 dbstore），轮/轴/整车重/不平衡
-均以 kg 存库，导出时直接填入，不再做结构转换与单位换算。
+数据库存储结构与模板一致（见 dbstore），轮/轴/整车重/不平衡均以 kg
+存库，导出时直接填入，不再做结构转换与单位换算。
 """
 from __future__ import annotations
 
@@ -21,11 +23,15 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from measure import KN_TO_KG  # noqa: F401  （兼容旧引用；换算系数定义在 measure）
+from measure import KN_TO_KG, axis_rows_kg  # noqa: F401  （KN_TO_KG 兼容旧引用）
 
 logger = logging.getLogger(__name__)
 
 TEMPLATE_SHEET = "report"
+
+#: 模板数据区固定的轴行数（B7:B15）
+AXIS_ROW_COUNT = 9
+_AXIS_FIRST_ROW = 7
 
 
 def ensure_measure_template(template_path: str | Path) -> Path:
@@ -49,46 +55,46 @@ def ensure_measure_template(template_path: str | Path) -> Path:
     thin = Side(style="thin")
     border = Border(left=thin, right=thin, top=thin, bottom=thin)
 
-    ws.merge_cells("B2:E2")
+    ws.merge_cells("B2:G2")
     c = ws["B2"]
     c.value = "称重测量报告"
     c.font = title_font
     c.alignment = center
 
-    for coord, label in [("B3", "操作者"), ("D3", "时间"),
-                         ("B4", "车型"), ("D4", "车号"),
+    for coord, label in [("B3", "操作者"), ("E3", "时间"),
+                         ("B4", "车型"), ("E4", "车号"),
                          ("B5", "进车方向")]:
         ws[coord].value = label
         ws[coord].font = head_font
-    ws.merge_cells("C5:E5")
+    for span in ("C3:D3", "F3:G3", "C4:D4", "F4:G4"):
+        ws.merge_cells(span)
 
-    for coord, label in [("B6", "轮号"), ("C6", "轮重(kg)"),
-                         ("D6", "偏差(%)"), ("E6", "轴重(kg)")]:
+    for coord, label in [("B6", "轴号"), ("C6", "轴重/kg"),
+                         ("D6", "轮重(左)/kg"), ("E6", "轮重偏差(左)"),
+                         ("F6", "轮重(右)/kg"), ("G6", "轮重偏差(右)")]:
         ws[coord].value = label
         ws[coord].font = head_font
         ws[coord].alignment = center
 
-    for i in range(18):  # B7:B24 轮号
-        r = 7 + i
+    for i in range(AXIS_ROW_COUNT):  # B7:B15 轴号 1-9
+        r = _AXIS_FIRST_ROW + i
         ws[f"B{r}"].value = i + 1
         ws[f"B{r}"].alignment = center
-    for k in range(9):  # 轴重两行合并
-        ws.merge_cells(f"E{7 + 2 * k}:E{8 + 2 * k}")
 
-    ws["B25"].value = "整车重(kg)"
-    ws["B25"].font = head_font
-    ws.merge_cells("B25:C25")
-    ws.merge_cells("D25:E25")
-    ws["B26"].value = "不平衡检测(kg)"
-    ws["B26"].font = head_font
-    ws.merge_cells("B26:C26")
-    ws.merge_cells("D26:E26")
+    ws["B16"].value = "整车重(kg)"
+    ws["B16"].font = head_font
+    ws.merge_cells("B16:C16")
+    ws.merge_cells("D16:G16")
+    ws["B17"].value = "不平衡检测(kg)"
+    ws["B17"].font = head_font
+    ws.merge_cells("B17:C17")
+    ws.merge_cells("D17:G17")
 
-    for row in ws["B2:E26"]:
+    for row in ws["B2:G17"]:
         for cell in row:
             cell.border = border
 
-    for col, width in zip("ABCDE", [2, 14, 16, 14, 16]):
+    for col, width in zip("ABCDEFG", [2, 10, 12, 14, 14, 14, 14]):
         ws.column_dimensions[col].width = width
 
     wb.save(template_path)
@@ -104,29 +110,44 @@ def _num(v: Any) -> float | str:
 def build_measure_cells(record: dict[str, Any], operator: str = "") -> dict[str, Any]:
     """记录 -> {单元格引用: 值}，供 PdfReport.set_cells 使用（abc.xlsx 版式）。
 
-    记录的存储结构与模板 1:1 对应（轮数据/轴数据/整车重/不平衡均为
-    kg），本函数只做单元格定位，不做结构转换与单位换算。操作者优先
-    用记录自带的（测量时落库），为空时用调用方传入的当前用户兜底。
+    记录的存储结构与模板一致（每轴一行：轴重/左轮重/左偏差/右轮重/右
+    偏差；整车重/不平衡均为 kg），本函数只做单元格定位，不做结构转换
+    与单位换算。操作者优先用记录自带的（测量时落库），为空时用调用方
+    传入的当前用户兜底。
     """
     cells: dict[str, Any] = {
         "C3": record.get("operator") or operator,
-        "E3": record.get("measure_time", ""),
+        "F3": record.get("measure_time", ""),
         "C4": record.get("model", ""),
-        "E4": record.get("car_no", ""),
+        "F4": record.get("car_no", ""),
         "C5": record.get("direction", ""),  # 进车方向
     }
-    for entry in record.get("wheels") or []:
-        r = 6 + int(entry["轮号"])
-        cells[f"C{r}"] = _num(entry.get("轮重(kg)"))
-        cells[f"D{r}"] = _num(entry.get("偏差(%)"))
-    for entry in record.get("axles") or []:
-        v = entry.get("轴重(kg)")
-        cells[f"E{7 + 2 * (int(entry['轴号']) - 1)}"] = _num(v)
+
+    rows = axis_rows_kg(record.get("wheels"), record.get("axles"))
+    if len(rows) > AXIS_ROW_COUNT:
+        logger.warning(
+            "车型轴数(%s)超过模板行数(%s)，超出部分未写入报告",
+            len(rows), AXIS_ROW_COUNT,
+        )
+    for entry in rows[:AXIS_ROW_COUNT]:
+        try:
+            axle_no = int(entry["轴号"])
+        except (TypeError, ValueError):
+            continue
+        if not 1 <= axle_no <= AXIS_ROW_COUNT:
+            continue
+        r = _AXIS_FIRST_ROW + axle_no - 1
+        cells[f"B{r}"] = axle_no
+        cells[f"C{r}"] = _num(entry["轴重(kg)"])
+        cells[f"D{r}"] = _num(entry["轮重(左)/kg"])
+        cells[f"E{r}"] = _num(entry["轮重偏差(左)"])
+        cells[f"F{r}"] = _num(entry["轮重(右)/kg"])
+        cells[f"G{r}"] = _num(entry["轮重偏差(右)"])
 
     total = record.get("total_kg")
-    cells["D25"] = round(float(total), 1) if isinstance(total, (int, float)) else ""
+    cells["D16"] = round(float(total), 1) if isinstance(total, (int, float)) else ""
     balance = record.get("balance_kg")
-    cells["D26"] = round(float(balance), 1) if isinstance(balance, (int, float)) else ""
+    cells["D17"] = round(float(balance), 1) if isinstance(balance, (int, float)) else ""
     return cells
 
 

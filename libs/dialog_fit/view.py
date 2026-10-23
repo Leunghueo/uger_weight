@@ -7,12 +7,14 @@
 - 分段标定图：把标定点连成折线，直观展示换算曲线。
 - 偏移(add)：换算后的整体偏移，真值 = segs(采集值) + add。
 - 标零：读取当前真值，预填可将其清零的 add（仅预填，需点保存生效）。
+- 去皮：向该点位单独发送硬件清零指令（vsp.zero），不改任何配置。
 - 保存：校验后经 VSPTable.update_by_id 写回 vsp.json，并即时更新
   运行中的点位对象（下一次轮询即按新参数换算）。
 """
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
 
 from PySide6.QtCore import QPointF, Qt, QRectF, QLocale, QTimer
@@ -35,6 +37,8 @@ from PySide6.QtWidgets import (
 )
 
 from _runtime import get_runtime
+
+logger = logging.getLogger(__name__)
 
 
 class SegChartWidget(QWidget):
@@ -181,6 +185,10 @@ class Window(QDialog):
         self.zero_btn = QPushButton("标零", info_card)
         self.zero_btn.clicked.connect(self._on_zero_btn_clicked)
         add_layout.addWidget(self.zero_btn)
+        self.tare_btn = QPushButton("去皮", info_card)
+        self.tare_btn.setToolTip("向该点位单独发送硬件清零指令（不改配置）")
+        self.tare_btn.clicked.connect(self._on_tare_btn_clicked)
+        add_layout.addWidget(self.tare_btn)
 
         form.addRow("来源:", self.source_label)
         form.addRow("名称:", self.name_label)
@@ -250,6 +258,7 @@ class Window(QDialog):
         # 回车默认添加标定点（方便连续标定），避免误触标零
         self.add_btn.setDefault(True)
         self.zero_btn.setAutoDefault(False)
+        self.tare_btn.setAutoDefault(False)
         self.remove_btn.setAutoDefault(False)
         self.save_btn.setAutoDefault(False)
 
@@ -323,6 +332,23 @@ class Window(QDialog):
             return
         # 标零只是把 -真值 预填进输入框, 不落盘; 是否生效取决于后续是否点击保存
         self.add_edit.setText(f"{-(true_value - self._current_point_add()):g}")
+
+    def _on_tare_btn_clicked(self) -> None:
+        """去皮：向当前点位单独发送硬件清零指令（与标零无关，不改配置）。"""
+        table = self.runtime.get("vsp")
+        if table is None:
+            QMessageBox.warning(self, "去皮", "VSP 未启用，无法发送清零指令")
+            return
+        try:
+            ok = table.zero(self.pt_name)
+        except Exception as exc:
+            logger.exception("点位 %s 清零指令发送失败", self.pt_name)
+            QMessageBox.warning(self, "去皮", f"清零指令发送失败：{exc}")
+            return
+        if ok:
+            QMessageBox.information(self, "去皮", f"已向 {self.pt_name} 发送清零指令")
+        else:
+            QMessageBox.warning(self, "去皮", f"{self.pt_name} 未收到应答，清零可能未生效")
 
     def _on_table_changed(self, item: QTableWidgetItem) -> None:
         del item

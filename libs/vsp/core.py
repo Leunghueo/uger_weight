@@ -482,7 +482,7 @@ def hex2dis(data: bytes) -> float:
 
     value_bytes = data[-6:-2]
     raw_value = int.from_bytes(value_bytes, byteorder="big", signed=False)
-    return raw_value / 1000
+    return raw_value
 
 @parser("hex2kg")
 def hex2kg(data: bytes) -> float:

@@ -6,6 +6,7 @@ import subprocess
 import tempfile
 from datetime import date
 from pathlib import Path
+from typing import Any
 
 from PySide6.QtCore import Qt
 from PySide6.QtPrintSupport import QPrintDialog
@@ -29,11 +30,31 @@ from PySide6.QtWidgets import (
 
 from _runtime import get_runtime
 from dbstore import get_measure, list_measures
-from measure import KN_TO_KG, results_from_report
+from measure import KN_TO_KG, axis_rows_kg, results_from_report
 from reporting import export_measure_pdf
-from results_table import fill_results_table, make_results_table
+from results_table import fill_results_table, format_value, make_results_table
 
 logger = logging.getLogger(__name__)
+
+# 主表格：一条记录按轴展开为 N 行（与测量结果表同版式，单位 kg）
+_TABLE_HEADERS = [
+    "ID", "车型", "车号", "进车方向", "测量时间",
+    "轴号", "轴重/kg", "轮重(左)/kg", "轮重偏差(左)", "轮重(右)/kg", "轮重偏差(右)",
+    "整车重(kg)",
+]
+# 同一记录跨轴行合并的列（ID/车型/车号/方向/时间/整车重）
+_MERGED_COLUMNS = (0, 1, 2, 3, 4, 11)
+
+
+_EMPTY_ROW: dict[str, Any] = {
+    "轴号": "", "轴重(kg)": "", "轮重(左)/kg": "",
+    "轮重偏差(左)": "", "轮重(右)/kg": "", "轮重偏差(右)": "",
+}
+
+
+def _kg(value: Any) -> Any:
+    """计算值(kN) -> 展示值(kg)。"""
+    return round(float(value) * KN_TO_KG, 1) if isinstance(value, (int, float)) else "--"
 
 
 class RecordDetailDialog(QDialog):
@@ -53,16 +74,16 @@ class RecordDetailDialog(QDialog):
         info.addRow("备注", QLabel(str(record.get("note", ""))))
         layout.addLayout(info)
 
-        results = results_from_report(record.get("wheels"), record.get("platforms")) or {}
+        results = results_from_report(record.get("wheels")) or {}
 
         wt = make_results_table()
         fill_results_table(wt, results)
         layout.addWidget(wt, 1)
 
         summary = QLabel(
-            f"整车重: {results.get('total', '--')} kN　|　"
-            f"轴重差: {results.get('axle_diff', '--')} kN　|　"
-            f"不平衡: {results.get('balance', '--')} kN"
+            f"整车重: {_kg(results.get('total'))} kg　|　"
+            f"轴重差: {_kg(results.get('axle_diff'))} kg　|　"
+            f"不平衡: {_kg(results.get('balance'))} kg"
         )
         font = summary.font()
         font.setBold(True)
@@ -121,13 +142,14 @@ class RecordsView(QWidget):
         search_row.addStretch(1)
         layout.addLayout(search_row)
 
-        self.table = QTableWidget(0, 6)
-        self.table.setHorizontalHeaderLabels(
-            ["ID", "车型", "车号", "进车方向", "测量时间", "整车重(kN)"]
-        )
-        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.table = QTableWidget(0, len(_TABLE_HEADERS))
+        self.table.setHorizontalHeaderLabels(list(_TABLE_HEADERS))
+        header = self.table.horizontalHeader()
+        header.setSectionResizeMode(QHeaderView.ResizeToContents)
+        header.setStretchLastSection(True)
         self.table.setEditTriggers(QTableWidget.NoEditTriggers)
         self.table.setSelectionBehavior(QTableWidget.SelectRows)
+        self.table.verticalHeader().setVisible(False)
         self.table.itemDoubleClicked.connect(lambda _i: self._on_view())
         layout.addWidget(self.table, 1)
 
@@ -164,18 +186,37 @@ class RecordsView(QWidget):
         except Exception:
             logger.exception("检索测量记录失败")
             records = []
-        self.table.setRowCount(len(records))
-        for row, r in enumerate(records):
-            total_kg = r.get("total_kg")
-            total = round(total_kg / KN_TO_KG, 2) if isinstance(total_kg, (int, float)) else ""
-            for col, v in enumerate(
-                [r["id"], r["model"], r["car_no"], r["direction"],
-                 r["measure_time"], total]
-            ):
-                item = QTableWidgetItem(str(v))
-                item.setTextAlignment(Qt.AlignCenter)
-                item.setData(Qt.UserRole, r["id"])
-                self.table.setItem(row, col, item)
+        self.table.setRowCount(0)
+        for r in records:
+            # 一条记录按轴展开：每轴一行，前几列与整车重跨行合并
+            rows = axis_rows_kg(r.get("wheels"), r.get("axles")) or [dict(_EMPTY_ROW)]
+            total_text = format_value(r.get("total_kg"), 1)
+            base = [r["id"], r["model"], r["car_no"], r["direction"], r["measure_time"]]
+            start = self.table.rowCount()
+            self.table.setRowCount(start + len(rows))
+            for offset, entry in enumerate(rows):
+                values = base + [
+                    format_value(entry["轴号"], 0),
+                    format_value(entry["轴重(kg)"], 1),
+                    format_value(entry["轮重(左)/kg"], 1),
+                    format_value(entry["轮重偏差(左)"], 2),
+                    format_value(entry["轮重(右)/kg"], 1),
+                    format_value(entry["轮重偏差(右)"], 2),
+                    total_text,
+                ]
+                for col, value in enumerate(values):
+                    item = QTableWidgetItem(value)
+                    item.setTextAlignment(Qt.AlignCenter)
+                    item.setData(Qt.UserRole, r["id"])
+                    self.table.setItem(start + offset, col, item)
+            if len(rows) > 1:
+                for col in _MERGED_COLUMNS:
+                    self.table.setSpan(start, col, len(rows), 1)
+
+    def showEvent(self, event) -> None:  # type: ignore[override]
+        """切到本页时重新检索，保证与最新测量结果同步。"""
+        super().showEvent(event)
+        self._search()
 
     def _selected_id(self) -> int | None:
         row = self.table.currentRow()

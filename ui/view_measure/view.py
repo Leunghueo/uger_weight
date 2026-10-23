@@ -4,13 +4,14 @@
     坑1: 台 1-6   （下排 1,3,5 / 上排 2,4,6）
     坑2: 台 7-14  （下排 7,9,11,13 / 上排 8,10,12,14）
     坑3: 台 15-18 （下排 15,17 / 上排 16,18）
-车型下拉来自 maps.json；当前车型的台号高亮显示。
+车型下拉来自 maps.json；高亮的是「当前车型 + 当前进车方向」所解析出的台位
+（一轴向西取"正向称台"，一轴向东取"反向称台"）。
 """
 from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 
 from PySide6.QtCore import Qt, QTimer
@@ -45,14 +46,18 @@ from dbstore import (
     list_measures,
     save_measure_result,
     update_measure_meta,
-    update_measure_tare,
 )
 from results_table import clear_results_table, fill_results_table, make_results_table
 from measure import (
+    DIRECTIONS,
+    KN_TO_KG,
     PITS,
+    WheelRef,
     apply_tare,
     calculate,
     read_platforms,
+    report_skeleton,
+    resolve_wheels,
     results_from_report,
     to_report_data,
 )
@@ -67,8 +72,9 @@ ALL_PLATFORMS = list(range(1, 19))
 # 场景视图开关：True=默认使用俯视示意图；False=回退旧卡片视图
 USE_SCENE_VIEW = True
 
-# 进车方向固定选项（存入 direction 列）
-DIRECTIONS = ["一轴向西", "一轴向东"]
+# 进车方向固定选项（存入 direction 列），取自 measure.DIRECTIONS：
+#   一轴向西 -> 正向（读 maps.json 的 "正向称台"）
+#   一轴向东 -> 反向（读 maps.json 的 "反向称台"）
 
 
 def _set_combo_value(combo: QComboBox, value: str) -> None:
@@ -148,27 +154,47 @@ class MeasureView(QWidget):
 
     # ---------- 配置 ----------
     def _load_maps(self) -> dict[str, dict]:
-        """maps.json: {车型: {"称重台": [...], "校验数据": {...}}}。"""
+        """maps.json: {车型: {轴名: {轮别: {正向称台/反向称台/...}}}}。
+
+        只读取到内存，测量值（轮重/轮重差）不回写配置文件。
+        """
         path = Path(self.runtime["paths"]["maps_config"])
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
             maps: dict[str, dict] = {}
-            for model, cfg in data.items():
-                if isinstance(cfg, dict):
-                    maps[str(model)] = {
-                        "称重台": [int(x) for x in cfg.get("称重台", [])],
-                        "校验数据": cfg.get("校验数据") or {},
+            for model, axles in data.items():
+                if not isinstance(axles, dict):
+                    continue
+                parsed: dict[str, dict] = {}
+                for axle_name, wheels in axles.items():
+                    if not isinstance(wheels, dict):
+                        continue
+                    parsed[str(axle_name)] = {
+                        str(side): dict(wheel)
+                        for side, wheel in wheels.items()
+                        if isinstance(wheel, dict)
                     }
-                elif isinstance(cfg, list):  # 兼容旧格式 {车型: [台号...]}
-                    maps[str(model)] = {"称重台": [int(x) for x in cfg], "校验数据": {}}
+                if parsed:
+                    maps[str(model)] = parsed
             return maps
         except Exception:
             logger.exception("读取车型台位配置失败: %s", path)
             return {}
 
+    # ---------- 车型 / 方向 -> 车轮映射 ----------
+    def _current_model(self) -> str:
+        return self.model_combo.currentText().strip()
+
+    def _current_direction(self) -> str:
+        return self.direction_combo.currentText().strip()
+
+    def _wheel_refs(self) -> list[WheelRef]:
+        """当前 车型 + 进车方向 对应的有序车轮列表（含各自台号）。"""
+        return resolve_wheels(self._maps, self._current_model(), self._current_direction())
+
     def _enabled_platforms(self) -> list[int]:
-        model = self.model_combo.currentText().strip()
-        return list(self._maps.get(model, {}).get("称重台", ALL_PLATFORMS))
+        """本次测量实际使用的台号（随进车方向变化）。"""
+        return [ref.platform for ref in self._wheel_refs()]
 
     @staticmethod
     def _load_platform_qss() -> str:
@@ -199,7 +225,9 @@ class MeasureView(QWidget):
         self.view_toggle = QCheckBox("俯视示意图")
         self.view_toggle.setChecked(USE_SCENE_VIEW)
         self.view_toggle.setToolTip("取消勾选则回退到旧版卡片视图")
-        self.view_toggle.toggled.connect(self._on_view_toggle)
+        # set self.view_toggle hidden
+        self.view_toggle.setVisible(False)
+        # self.view_toggle.toggled.connect(self._on_view_toggle)
         switch_row.addWidget(self.view_toggle)
         top_layout.addLayout(switch_row)
 
@@ -253,6 +281,8 @@ class MeasureView(QWidget):
         self.car_edit.setPlaceholderText("手动输入")
         self.direction_combo = QComboBox()
         self.direction_combo.addItems(DIRECTIONS)
+        # 进车方向改变 -> 每个轮子读的台号改变 -> 高亮台位随之改变
+        self.direction_combo.currentTextChanged.connect(self._apply_highlight)
         form.addRow("车型", self.model_combo)
         form.addRow("车号", self.car_edit)
         form.addRow("进车方向", self.direction_combo)
@@ -270,14 +300,11 @@ class MeasureView(QWidget):
         left_layout.addLayout(btn_row1)
 
         btn_row2 = QHBoxLayout()
-        self.btn_tare = QPushButton("去皮")
         self.btn_measure = QPushButton("开始测量")
         font = self.btn_measure.font()
         font.setBold(True)
         self.btn_measure.setFont(font)
-        self.btn_tare.clicked.connect(self._on_tare)
         self.btn_measure.clicked.connect(self._on_measure)
-        btn_row2.addWidget(self.btn_tare)
         btn_row2.addWidget(self.btn_measure)
         left_layout.addLayout(btn_row2)
 
@@ -289,7 +316,7 @@ class MeasureView(QWidget):
 
         result_box = QGroupBox("测量结果")
         result_layout = QVBoxLayout(result_box)
-        self.summary_label = QLabel("整车重: -- kN　|　轴重差: -- kN　|　不平衡: -- kN")
+        self.summary_label = QLabel("整车重: -- kg　|　轴重差: -- kg　|　不平衡: -- kg")
         font = self.summary_label.font()
         font.setPointSize(11)
         font.setBold(True)
@@ -311,8 +338,12 @@ class MeasureView(QWidget):
         self._apply_highlight()
 
     def _refresh_records(self) -> None:
+        """只列出当天的记录（历史记录到「工具-测量记录」页查询）。"""
+        today = date.today().isoformat()
         try:
-            records = list_measures(self._db_path, limit=200)
+            records = list_measures(
+                self._db_path, date_from=today, date_to=today, limit=200
+            )
         except Exception:
             logger.exception("读取测量记录失败")
             records = []
@@ -343,33 +374,34 @@ class MeasureView(QWidget):
         _set_combo_value(self.direction_combo, record["direction"])
         tare = record.get("tare") or {}
         self._tare = {int(k): float(v) for k, v in tare.items()}
-        results = results_from_report(record.get("wheels"), record.get("platforms"))
+        results = results_from_report(record.get("wheels"))
         if results:
             self._show_results(results)
         else:
             self._clear_results()
 
     def _on_create(self) -> None:
-        dlg = RecordEditDialog(sorted(self._maps.keys()) or ["默认"], parent=self)
-        # 预填当前栏位
-        if self.model_combo.currentText():
-            idx = dlg.model_combo.findText(self.model_combo.currentText())
-            if idx >= 0:
-                dlg.model_combo.setCurrentIndex(idx)
-        dlg.car_edit.setText(self.car_edit.text())
-        _set_combo_value(dlg.direction_combo, self.direction_combo.currentText())
-        if dlg.exec() != QDialog.Accepted:
-            return
-        d = dlg.data()
-        if not d["model"] or not d["car_no"]:
+        """用左栏当前的 车型/车号/进车方向 直接创建记录（不弹窗）。"""
+        model = self._current_model()
+        car_no = self.car_edit.text().strip()
+        direction = self._current_direction()
+        if not model or not car_no:
             QMessageBox.warning(self, "提示", "车型和车号不能为空")
             return
+        refs = resolve_wheels(self._maps, model, direction)
+        if not refs:
+            QMessageBox.warning(self, "提示", "当前车型/进车方向未配置任何车轮台位，无法创建")
+            return
+        skeleton = report_skeleton(refs)
         rid = insert_measure(
-            self._db_path, model=d["model"], car_no=d["car_no"],
-            direction=d["direction"], note=d["note"],
+            self._db_path, model=model, car_no=car_no,
+            direction=direction, note="",
+            platforms=[ref.platform for ref in refs],
+            wheels=skeleton["wheels"], axles=skeleton["axles"],
         )
         self._current_id = rid
         self._tare = {}
+        self._clear_results()
         self._refresh_records()
 
     def _on_edit(self) -> None:
@@ -430,62 +462,26 @@ class MeasureView(QWidget):
             w.set_value(shown.get(p))
         self.pits_scene.set_values(shown)
 
-    # ---------- 去皮 / 测量 ----------
-    def _on_tare(self) -> None:
-        """去皮：向每个启用的台位发送硬件清零指令（无需解析返回数据）。
-
-        硬件清零后，软件去皮量清零（避免重复扣除）。
-        无 VSP 时退回软件去皮（记录当前值）。
-        """
-        rid = self._selected_id()
-        if rid is None:
-            QMessageBox.warning(self, "提示", "请先创建或选择一条测量记录，再去皮")
-            return
-        enabled = self._enabled_platforms()
-        vsp = self.runtime.get("vsp")
-        if vsp is None:
-            vals = self._read_live()
-            tare = {p: v for p, v in vals.items() if v is not None}
-            if not tare:
-                QMessageBox.warning(self, "提示", "当前无有效称重数据，无法去皮")
-                return
-            self._tare = tare
-            update_measure_tare(self._db_path, rid, {str(k): v for k, v in tare.items()})
-            QMessageBox.information(self, "去皮", f"已记录 {len(tare)} 个台位的去皮值")
-            return
-
-        failed: list[int] = []
-        for p in enabled:
-            try:
-                ok = vsp.zero(f"称重台{p}")
-            except Exception:
-                logger.exception("称重台%s 清零指令发送失败", p)
-                ok = False
-            if not ok:
-                failed.append(p)
-        # 硬件已清零：软件去皮量清零，避免重复扣除
-        self._tare = {}
-        update_measure_tare(self._db_path, rid, {})
-        self._refresh_values()
-        if failed:
-            QMessageBox.warning(self, "去皮", f"以下台位清零失败：{failed}")
-        else:
-            QMessageBox.information(self, "去皮", f"已向 {len(enabled)} 个台位发送清零指令")
-
+    # ---------- 测量 ----------
     def _on_measure(self) -> None:
         rid = self._selected_id()
         if rid is None:
             QMessageBox.warning(self, "提示", "请先创建或选择一条测量记录，再开始测量")
             return
-        model = self.model_combo.currentText().strip()
-        enabled = self._enabled_platforms()
-        vals = self._read_live()
-        missing = [p for p in enabled if vals.get(p) is None]
+        refs = self._wheel_refs()
+        if not refs:
+            QMessageBox.warning(self, "提示", "当前车型/进车方向未配置任何车轮台位，无法测量")
+            return
+        enabled = [ref.platform for ref in refs]
+        # 只采集本次车型+进车方向真正用到的台位（由 maps.json 决定）
+        vals = read_platforms(self.runtime.get("vsp"), enabled)
         tared = apply_tare(vals, self._tare)
-        results = calculate(tared, enabled)
+        results = calculate(tared, refs)
+        missing = sorted(set(results["missing"]))
         self._show_results(results)
 
-        now = datetime.now().isoformat(timespec="seconds")
+        # 本地时间且 4 位年份：与新建记录一致，便于按日期检索/当天过滤
+        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         data = to_report_data(results)
         save_measure_result(
             self._db_path, rid,
@@ -507,12 +503,16 @@ class MeasureView(QWidget):
     # ---------- 结果区 ----------
     def _clear_results(self) -> None:
         clear_results_table(self.result_table)
-        self.summary_label.setText("整车重: -- kN　|　轴重差: -- kN　|　不平衡: -- kN")
+        self.summary_label.setText("整车重: -- kg　|　轴重差: -- kg　|　不平衡: -- kg")
+
+    def _kg(self, value: Any) -> Any:
+        """计算值(kN) -> 展示值(kg)。"""
+        return round(float(value) * KN_TO_KG, 1) if isinstance(value, (int, float)) else "--"
 
     def _show_results(self, results: dict) -> None:
         fill_results_table(self.result_table, results)
         self.summary_label.setText(
-            f"整车重: {results.get('total', '--')} kN　|　"
-            f"轴重差: {results.get('axle_diff', '--')} kN　|　"
-            f"不平衡: {results.get('balance', '--')} kN"
+            f"整车重: {self._kg(results.get('total'))} kg　|　"
+            f"轴重差: {self._kg(results.get('axle_diff'))} kg　|　"
+            f"不平衡: {self._kg(results.get('balance'))} kg"
         )

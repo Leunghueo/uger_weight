@@ -1,26 +1,30 @@
-"""中间展示用结果表：与报告结构对齐的分段表（测量页与记录详情共用）。
+"""测量结果表：每轴一行，与报告模板 abc.xlsx 同版式（测量页与记录详情共用）。
 
-结构：先「轮数据」18 行（轮号/轮重/偏差%），再「轴数据」9 行
-（轴号/轴重）。未启用或缺数的轮/轴保留行、值留空，与报告一致。
-程序内单位为 kN；报告（abc.xlsx）为 kg。
+结构（列）：轴号 | 轴重/kg | 轮重(左)/kg | 轮重偏差(左) | 轮重(右)/kg |
+轮重偏差(右)。行数由 maps.json 的车型决定，未测量或缺数留空。
+程序内计算用 kN，展示与报告一致用 kg。
 """
 from __future__ import annotations
 
 from typing import Any
 
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QFont
 from PySide6.QtWidgets import QHeaderView, QTableWidget, QTableWidgetItem
 
-WHEEL_COUNT = 18
-AXLE_COUNT = 9
+from measure import axis_rows_kg, to_report_data
+
+_COLUMNS = ["轴号", "轴重/kg", "轮重(左)/kg", "轮重偏差(左)", "轮重(右)/kg", "轮重偏差(右)"]
+
+#: 各列的小数位：轮重/轴重(kg) 1 位，轮重偏差(%) 2 位
+_COLUMN_DIGITS = [0, 1, 1, 2, 1, 2]
+
 _ROW_HEIGHT = 20
 
 
 def make_results_table() -> QTableWidget:
-    """创建分段结果表（3 列：编号/重量(kN)/偏差(%)）。"""
-    table = QTableWidget(0, 3)
-    table.setHorizontalHeaderLabels(["编号", "重量(kN)", "偏差(%)"])
+    """创建测量结果表（每轴一行）。"""
+    table = QTableWidget(0, len(_COLUMNS))
+    table.setHorizontalHeaderLabels(list(_COLUMNS))
     table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
     table.setEditTriggers(QTableWidget.NoEditTriggers)
     table.verticalHeader().setVisible(False)
@@ -31,42 +35,36 @@ def clear_results_table(table: QTableWidget) -> None:
     table.setRowCount(0)
 
 
-def _section_row(table: QTableWidget, title: str) -> None:
-    row = table.rowCount()
-    table.insertRow(row)
-    item = QTableWidgetItem(title)
-    font = QFont()
-    font.setBold(True)
-    item.setFont(font)
-    item.setTextAlignment(Qt.AlignLeft | Qt.AlignVCenter)
-    table.setItem(row, 0, item)
-    table.setSpan(row, 0, 1, 3)
+def format_value(value: Any, digits: int) -> str:
+    """数值按指定小数位格式化；空值/空串保持空白。"""
+    if value is None or value == "":
+        return ""
+    if isinstance(value, (int, float)):
+        return f"{float(value):.{digits}f}"
+    return str(value)
 
 
-def _data_row(table: QTableWidget, no: int, weight: Any, dev: Any = "") -> None:
-    row = table.rowCount()
-    table.insertRow(row)
-    for col, v in enumerate([no, weight, dev]):
-        item = QTableWidgetItem("" if v is None else str(v))
-        item.setTextAlignment(Qt.AlignCenter)
-        table.setItem(row, col, item)
-    table.setRowHeight(row, _ROW_HEIGHT)
+def fill_results_table_kg(
+    table: QTableWidget,
+    wheels: list[dict[str, Any]] | None,
+    axles: list[dict[str, Any]] | None,
+) -> None:
+    """用存储结构（kg，见 measure.to_report_data）填充结果表。"""
+    rows = axis_rows_kg(wheels, axles)
+    table.setRowCount(len(rows))
+    for row_index, row in enumerate(rows):
+        values = [
+            row["轴号"], row["轴重(kg)"], row["轮重(左)/kg"],
+            row["轮重偏差(左)"], row["轮重(右)/kg"], row["轮重偏差(右)"],
+        ]
+        for col, value in enumerate(values):
+            item = QTableWidgetItem(format_value(value, _COLUMN_DIGITS[col]))
+            item.setTextAlignment(Qt.AlignCenter)
+            table.setItem(row_index, col, item)
+        table.setRowHeight(row_index, _ROW_HEIGHT)
 
 
 def fill_results_table(table: QTableWidget, results: dict[str, Any] | None) -> None:
-    """把 calculate() 形状的结果填入分段表；无结果时整表留空结构。"""
-    results = results or {}
-    wheels: dict = results.get("wheels") or {}
-    deviations: dict = results.get("deviations") or {}
-    axles: dict = results.get("axles") or {}
-
-    table.setRowCount(0)
-    _section_row(table, "轮数据")
-    for p in range(1, WHEEL_COUNT + 1):
-        v = wheels.get(str(p))
-        _data_row(table, p, "" if v is None else v, deviations.get(str(p), ""))
-    _section_row(table, "轴数据")
-    for k in range(1, AXLE_COUNT + 1):
-        key = f"{2 * k - 1}-{2 * k}"
-        v = axles.get(key)
-        _data_row(table, k, "" if v is None else v)
+    """把 calculate() 形状的结果（kN）填入结果表，展示为 kg。"""
+    data = to_report_data(results or {})
+    fill_results_table_kg(table, data.get("wheels"), data.get("axles"))
