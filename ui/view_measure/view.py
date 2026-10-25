@@ -16,12 +16,10 @@ from pathlib import Path
 
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import (
-    QCheckBox,
     QComboBox,
     QDialog,
     QDialogButtonBox,
     QFormLayout,
-    QGridLayout,
     QGroupBox,
     QHBoxLayout,
     QHeaderView,
@@ -50,8 +48,6 @@ from dbstore import (
 from results_table import clear_results_table, fill_results_table, make_results_table
 from measure import (
     DIRECTIONS,
-    KN_TO_KG,
-    PITS,
     WheelRef,
     apply_tare,
     calculate,
@@ -62,15 +58,11 @@ from measure import (
     to_report_data,
 )
 
-from .platform_cards_legacy import PlatformWidget
 from .platform_scene import PlatformSceneView
 
 logger = logging.getLogger(__name__)
 
 ALL_PLATFORMS = list(range(1, 19))
-
-# 场景视图开关：True=默认使用俯视示意图；False=回退旧卡片视图
-USE_SCENE_VIEW = True
 
 # 进车方向固定选项（存入 direction 列），取自 measure.DIRECTIONS：
 #   一轴向西 -> 正向（读 maps.json 的 "正向称台"）
@@ -137,7 +129,6 @@ class MeasureView(QWidget):
         self.runtime = get_runtime()
         self._db_path = self.runtime["paths"]["db"]
         self._maps: dict[str, dict] = self._load_maps()
-        self._platform_widgets: dict[int, PlatformWidget] = {}
         self._tare: dict[int, float] = {}
         self._current_id: int | None = None
         self._last_values: dict[int, float | None] = {}
@@ -196,16 +187,6 @@ class MeasureView(QWidget):
         """本次测量实际使用的台号（随进车方向变化）。"""
         return [ref.platform for ref in self._wheel_refs()]
 
-    @staticmethod
-    def _load_platform_qss() -> str:
-        """加载称重台示意图区域的独立样式（platform.qss）。"""
-        qss_path = Path(__file__).resolve().parent / "platform.qss"
-        try:
-            return qss_path.read_text(encoding="utf-8")
-        except Exception:
-            logger.exception("读取 platform.qss 失败: %s", qss_path)
-            return ""
-
     # ---------- 界面 ----------
     def _build_ui(self) -> None:
         main = QVBoxLayout(self)
@@ -218,49 +199,10 @@ class MeasureView(QWidget):
         top_layout.setContentsMargins(0, 0, 0, 0)
         top_layout.setSpacing(2)
 
-        # 视图切换：俯视示意图（默认） vs 旧卡片（备份对比）
-        switch_row = QHBoxLayout()
-        switch_row.setContentsMargins(0, 0, 0, 0)
-        switch_row.addStretch()
-        self.view_toggle = QCheckBox("俯视示意图")
-        self.view_toggle.setChecked(USE_SCENE_VIEW)
-        self.view_toggle.setToolTip("取消勾选则回退到旧版卡片视图")
-        # set self.view_toggle hidden
-        self.view_toggle.setVisible(False)
-        # self.view_toggle.toggled.connect(self._on_view_toggle)
-        switch_row.addWidget(self.view_toggle)
-        top_layout.addLayout(switch_row)
-
-        # 旧卡片区（备份实现 platform_cards_legacy.py，默认隐藏）
-        pits_area = QWidget()
-        pits_area.setObjectName("pitsArea")
-        pits_row = QHBoxLayout(pits_area)
-        pits_row.setContentsMargins(0, 0, 0, 0)
-        for pit_no, platforms in PITS.items():
-            box = QGroupBox(f"坑{pit_no}")
-            box.setObjectName("pitBox")
-            grid = QGridLayout(box)
-            grid.setSpacing(6)
-            evens = sorted(p for p in platforms if p % 2 == 0)
-            odds = sorted(p for p in platforms if p % 2 == 1)
-            for col, p in enumerate(evens):
-                w = PlatformWidget(p)
-                grid.addWidget(w, 0, col)
-                self._platform_widgets[p] = w
-            for col, p in enumerate(odds):
-                w = PlatformWidget(p)
-                grid.addWidget(w, 1, col)
-                self._platform_widgets[p] = w
-            pits_row.addWidget(box, len(platforms))
-        pits_area.setStyleSheet(self._load_platform_qss())
-        self.pits_area_cards = pits_area
-        top_layout.addWidget(pits_area, 1)
-
-        # 俯视示意图区（默认显示）
+        # 称重台俯视示意图（唯一视图，旧版卡片视图已移除）
         self.pits_scene = PlatformSceneView()
         self.pits_scene.setObjectName("pitsScene")
         top_layout.addWidget(self.pits_scene, 1)
-        self._on_view_toggle(USE_SCENE_VIEW)
         main.addWidget(top, 2)
 
         # ---- 底部：左侧测量记录栏 + 右侧测量结果 ----
@@ -432,17 +374,9 @@ class MeasureView(QWidget):
             self._clear_results()
         self._refresh_records()
 
-    # ---------- 视图切换 ----------
-    def _on_view_toggle(self, on: bool) -> None:
-        """俯视示意图 / 旧卡片视图切换。"""
-        self.pits_scene.setVisible(on)
-        self.pits_area_cards.setVisible(not on)
-
     # ---------- 高亮 ----------
     def _apply_highlight(self) -> None:
         enabled = set(self._enabled_platforms())
-        for p, w in self._platform_widgets.items():
-            w.set_highlight(p in enabled)
         self.pits_scene.set_highlight(enabled)
 
     # ---------- 实时值 ----------
@@ -458,8 +392,6 @@ class MeasureView(QWidget):
         # 所有称重台一律刷新并显示数据；车型启用的台位仅通过边框高亮提示
         self._last_values = self._read_live()
         shown = apply_tare(self._last_values, self._tare)
-        for p, w in self._platform_widgets.items():
-            w.set_value(shown.get(p))
         self.pits_scene.set_values(shown)
 
     # ---------- 测量 ----------
@@ -506,8 +438,8 @@ class MeasureView(QWidget):
         self.summary_label.setText("整车重: -- kg　|　轴重差: -- kg　|　不平衡: -- kg")
 
     def _kg(self, value: Any) -> Any:
-        """计算值(kN) -> 展示值(kg)。"""
-        return round(float(value) * KN_TO_KG, 1) if isinstance(value, (int, float)) else "--"
+        """展示值 kg（VSP 输出即 kg，不做换算）。"""
+        return round(float(value), 1) if isinstance(value, (int, float)) else "--"
 
     def _show_results(self, results: dict) -> None:
         fill_results_table(self.result_table, results)

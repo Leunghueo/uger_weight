@@ -17,13 +17,14 @@
     奇偶相邻两台" 这一旧假设不再成立：轴/轮/台的关系全部由 maps.json
     决定，代码不再内置任何轴配对规则。每轮只允许从唯一台号读数。
 
-计算规则:
-    轮重   = 该轮对应台号的传感器读数（kN，已去皮）
+计算规则（单位统一为 kg，全程不做 kN↔kg 换算）:
+    轮重   = 该轮对应台号的传感器读数（kg，已去皮）
     轴重   = 同一轴左右两轮轮重之和
     轮重差 = (轮重 - 轴重/2) / 轴重 * 100%
              （左右两轮互为相反数，均衡时均为 0）
     整车重 = 所有轮重之和（= 所有轴重之和）
     不平衡 = 最大轮重 - 最小轮重
+    VSP 点位经 parser + segs + add 换算后输出的即 kg，采集层不再处理单位。
 无效值统一用 INVALID(-1)。本系统只计算与呈现数值，不做合格/不合格判定。
 """
 from __future__ import annotations
@@ -45,10 +46,10 @@ PITS: dict[int, list[int]] = {
     3: [15, 16, 17, 18],
 }
 
-UNIT = "kN"
+UNIT = "kg"
 
-# 报告（abc.xlsx 模板）以 kg 呈现，存储结构与模板一致，单位为 kg
-KN_TO_KG = 1000.0 / 9.80665
+# 报告（abc.xlsx 模板）以 kg 呈现，存储结构与模板一致。
+# VSP 点位输出即 kg，采集 -> 计算 -> 存储 -> 展示全程不再做单位换算。
 
 #: maps.json 中的无效占位值（未测量/无数据）
 INVALID = -1.0
@@ -169,7 +170,7 @@ def platform_point_name(platform: int) -> str:
 
 
 def read_platforms(vsp_table: Any, platforms: list[int]) -> dict[int, float | None]:
-    """读取一组台号的当前称重值（kN）。
+    """读取一组台号的当前称重值（kg）。
 
     有 VSP 时走真实采集（含 sim 模式：VSP 内部已把地址替换为
     localhost@10000，走本地模拟器）；vsp_table 为空（VSP 未启用）
@@ -208,7 +209,7 @@ def calculate(
     values: dict[int, float | None],
     wheel_refs: list[WheelRef],
 ) -> dict[str, Any]:
-    """按 车轮->台号 映射计算结果。单位 kN，缺数如实记录。
+    """按 车轮->台号 映射计算结果。单位 kg（VSP 输出即 kg），缺数如实记录。
 
     wheel_refs 来自 resolve_wheels()（已按进车方向解析过台号）。
     只做数值计算，不做合格/不合格判定（本系统无结果检验）。
@@ -249,13 +250,13 @@ def calculate(
     axle_present = [v for v in axles.values() if v is not None]
 
     return {
-        "wheels": {str(p): v for p, v in wheel_values.items()},  # 台号 -> 轮重(kN)
+        "wheels": {str(p): v for p, v in wheel_values.items()},  # 台号 -> 轮重(kg)
         "wheel_refs": list(wheel_refs),                          # 有序的 轴/轮/台
         "axle_order": axle_order,                                # 轴名顺序
-        "axles": axles,                                          # 轴名 -> 轴重(kN)
+        "axles": axles,                                          # 轴名 -> 轴重(kg)
         "axle_diff": round(max(axle_present) - min(axle_present), 3) if len(axle_present) >= 2 else 0.0,
         "deviations": deviations,                                # 台号 -> 轮重差(%)
-        "total": round(sum(wheel_present), 3),                   # 整车重(kN)
+        "total": round(sum(wheel_present), 3),                   # 整车重(kg)
         "balance": round(max(wheel_present) - min(wheel_present), 3) if len(wheel_present) >= 2 else 0.0,
         "missing": missing,
         "unit": UNIT,
@@ -295,17 +296,17 @@ def report_skeleton(wheel_refs: list[WheelRef] | None = None) -> dict[str, Any]:
     }
 
 
-def _legacy_refs(wheels_kn: dict, axles_kn: dict) -> list[WheelRef]:
+def _legacy_refs(wheels_kg: dict, axles_kg: dict) -> list[WheelRef]:
     """旧结果（无 wheel_refs）兜底：按奇偶台号反推轴/轮。"""
     platform_axle: dict[int, str] = {}
-    for key in sorted(axles_kn, key=lambda k: int(str(k).split("-")[0])):
+    for key in sorted(axles_kg, key=lambda k: int(str(k).split("-")[0])):
         try:
             left, right = (int(x) for x in str(key).split("-", 1))
         except ValueError:
             continue
         platform_axle[left] = platform_axle[right] = str(key)
     refs: list[WheelRef] = []
-    for platform in sorted(int(k) for k in wheels_kn):
+    for platform in sorted(int(k) for k in wheels_kg):
         refs.append(
             WheelRef(
                 platform_axle.get(platform, f"轴{(platform + 1) // 2}"),
@@ -317,54 +318,55 @@ def _legacy_refs(wheels_kn: dict, axles_kn: dict) -> list[WheelRef]:
 
 
 def to_report_data(results: dict[str, Any] | None) -> dict[str, Any]:
-    """calculate() 的结果（kN）-> 存储/报告结构（kg）。
+    """calculate() 的结果（kg）-> 存储/报告结构（kg），1:1 直通。
 
+    VSP 输出即 kg，此处不再做 kN->kg 换算。
     未启用或缺数的轮/轴数值留空串；无结果时等同空的 report_skeleton()。
     """
     results = results or {}
-    wheels_kn: dict[str, Any] = results.get("wheels") or {}
+    wheels_kg: dict[str, Any] = results.get("wheels") or {}
     deviations: dict[str, Any] = results.get("deviations") or {}
-    axles_kn: dict[str, Any] = results.get("axles") or {}
+    axles_kg: dict[str, Any] = results.get("axles") or {}
 
     refs: list[WheelRef] = list(results.get("wheel_refs") or [])
     axle_order: list[str] = list(results.get("axle_order") or [])
-    if not refs and wheels_kn:
-        refs = _legacy_refs(wheels_kn, axles_kn)
+    if not refs and wheels_kg:
+        refs = _legacy_refs(wheels_kg, axles_kg)
         axle_order = list(dict.fromkeys(ref.axle for ref in refs))
-    if not axle_order and axles_kn:
-        axle_order = [str(k) for k in axles_kn]
+    if not axle_order and axles_kg:
+        axle_order = [str(k) for k in axles_kg]
 
     axle_index = {name: i for i, name in enumerate(axle_order, start=1)}
 
     axles = []
     for name in axle_order:
-        value = axles_kn.get(name)
+        value = axles_kg.get(name)
         axles.append({
             "轴号": axle_index[name],
-            "轴重(kg)": round(float(value) * KN_TO_KG, 1) if value is not None else "",
+            "轴重(kg)": round(float(value), 1) if value is not None else "",
         })
 
     wheels = []
     for index, ref in enumerate(refs, start=1):
-        value = wheels_kn.get(str(ref.platform))
+        value = wheels_kg.get(str(ref.platform))
         deviation = deviations.get(str(ref.platform))
         wheels.append({
             "轮号": index,
             "轴号": axle_index.get(ref.axle, ""),
             "台号": ref.platform,
             "轮别": ref.side,
-            "轮重(kg)": round(float(value) * KN_TO_KG, 1) if value is not None else "",
+            "轮重(kg)": round(float(value), 1) if value is not None else "",
             "偏差(%)": deviation if deviation is not None else "",
         })
 
     total = results.get("total")
     balance = results.get("balance")
-    has_data = bool(wheels_kn)
+    has_data = bool(wheels_kg)
     return {
         "wheels": wheels,
         "axles": axles,
-        "total_kg": round(float(total) * KN_TO_KG, 1) if has_data and total is not None else None,
-        "balance_kg": round(float(balance) * KN_TO_KG, 1) if has_data and balance is not None else None,
+        "total_kg": round(float(total), 1) if has_data and total is not None else None,
+        "balance_kg": round(float(balance), 1) if has_data and balance is not None else None,
     }
 
 
@@ -425,7 +427,7 @@ def axis_rows_kg(
 def results_from_report(
     wheels: list[dict[str, Any]] | None,
 ) -> dict[str, Any] | None:
-    """存储结构（kg）-> calculate() 结果形状（kN），供页面结果表展示。
+    """存储结构（kg）-> calculate() 结果形状（kg），供页面结果表展示。
 
     由轮重反算各台读数后走 calculate()，保证派生量（轴重/轮重差/不平衡）
     与测量当时的口径一致。无任何轮重数据时返回 None。
@@ -440,7 +442,7 @@ def results_from_report(
             platform = int(entry.get("台号") or entry.get("轮号"))
         except (TypeError, ValueError):
             continue
-        values[platform] = round(float(raw) / KN_TO_KG, 3)
+        values[platform] = round(float(raw), 3)
         side = str(entry.get("轮别") or "").strip()
         axle_no = entry.get("轴号")
         axle = f"轴{axle_no}" if isinstance(axle_no, int) and axle_no else ""

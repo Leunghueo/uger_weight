@@ -2,7 +2,7 @@
 
 结构（列）：轴号 | 轴重/kg | 轮重(左)/kg | 轮重偏差(左) | 轮重(右)/kg |
 轮重偏差(右)。行数由 maps.json 的车型决定，未测量或缺数留空。
-程序内计算用 kN，展示与报告一致用 kg。
+计算与展示全程单位统一为 kg（VSP 输出即 kg），不做 kN↔kg 换算。
 """
 from __future__ import annotations
 
@@ -65,6 +65,6 @@ def fill_results_table_kg(
 
 
 def fill_results_table(table: QTableWidget, results: dict[str, Any] | None) -> None:
-    """把 calculate() 形状的结果（kN）填入结果表，展示为 kg。"""
+    """把 calculate() 形状的结果（kg）填入结果表（1:1 展示）。"""
     data = to_report_data(results or {})
     fill_results_table_kg(table, data.get("wheels"), data.get("axles"))

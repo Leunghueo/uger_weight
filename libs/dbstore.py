@@ -14,7 +14,7 @@
 回溯"当时每个轮子读的是哪个台"。
 
 旧库（serial_no/values_json/results_json 结构）会在 init_db 时
-自动迁移：进车方向取原 serial_no，轮/轴数据由旧结果换算（kN->kg）。
+自动迁移：进车方向取原 serial_no，轮/轴数据由旧结果换算得到（单位 kg）。
 """
 from __future__ import annotations
 

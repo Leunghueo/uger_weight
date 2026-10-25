@@ -155,6 +155,9 @@ class Window(QMainWindow):
         self.runtime = get_runtime()
         self.size = self.runtime["size"]
         self.log_viewer: LogViewerDialog | None = None
+        # 菜单权限缓存（_create_toolbar 填充，切换用户时刷新）
+        self._menu_buttons: list[tuple[QToolButton, list[tuple[QAction, bool]]]] = []
+        self._admin_view_ids: set[str] = set()
         self._fault_message = "无"
         self._vsp_ready = bool(getattr(self.runtime.get("vsp"), "alive", False))
         self._ai_ready = False
@@ -313,11 +316,16 @@ class Window(QMainWindow):
         toolbar.setToolButtonStyle(Qt.ToolButtonTextOnly)
         self.addToolBar(Qt.TopToolBarArea, toolbar)
 
+        # 菜单项按权限缓存：(按钮, [(动作, 是否管理员专属)])，供切换用户后刷新
+        self._menu_buttons: list[tuple[QToolButton, list[tuple[QAction, bool]]]] = []
+        self._admin_view_ids: set[str] = set()
         for group_name, actions in self.menus.items():
             button = QToolButton(self)
             button.setText(group_name)
             button.setPopupMode(QToolButton.InstantPopup)
+            group_actions: list[tuple[QAction, bool]] = []
             for action_config in actions:
+                admin_only = bool(action_config.get("admin", False))
                 action = QAction(action_config["title"], self)
                 action.triggered.connect(
                     partial(
@@ -325,11 +333,48 @@ class Window(QMainWindow):
                         action_config["view_id"],
                         action_config.get("pop", False),
                         action_config.get("fixed", False),
-                        action_config.get("admin", False),
+                        admin_only,
                     )
                 )
                 button.addAction(action)
+                group_actions.append((action, admin_only))
+                if admin_only:
+                    self._admin_view_ids.add(action_config["view_id"])
             toolbar.addWidget(button)
+            self._menu_buttons.append((button, group_actions))
+        self._refresh_menu_permissions()
+
+    def _refresh_menu_permissions(self) -> None:
+        """按当前用户刷新菜单：管理员专属项禁用；整组都是管理员项时隐藏该菜单。
+
+        判定口径见 _is_admin_user()：用户名 admin 或 UserClass 为
+        SUPERUSER/ADMIN。切换用户后需重新调用。
+        """
+        is_admin = self._is_admin_user()
+        for button, group_actions in self._menu_buttons:
+            all_admin_only = bool(group_actions) and all(flag for _a, flag in group_actions)
+            for action, admin_only in group_actions:
+                if not admin_only:
+                    continue
+                action.setEnabled(is_admin)
+                action.setToolTip("" if is_admin else "仅管理员可用")
+            # 如「设置」整组都受限，非管理员直接看不到该菜单
+            button.setVisible(is_admin or not all_admin_only)
+
+    def _close_admin_views(self) -> None:
+        """切换为非管理员后，关闭已打开的管理员专属标签页。"""
+        if self._is_admin_user():
+            return
+        for view_id in list(self._admin_view_ids):
+            index = self.tab_widget.find_view(view_id)
+            if index == -1:
+                continue
+            widget = self.tab_widget.widget(index)
+            shutdown = getattr(widget, "shutdown", None)
+            if callable(shutdown):
+                shutdown()
+            self.tab_widget.removeTab(index)
+            self.tab_widget.view_states.pop(index)
 
     def _update_user_text(self) -> None:
         self.user_button.setText(f"当前用户: {self.current_user}")
@@ -346,6 +391,9 @@ class Window(QMainWindow):
             "user_class": login_window.user_class,
         }
         self._update_user_text()
+        # 权限可能随用户变化：刷新菜单可用状态并关闭遗留的管理员页面
+        self._refresh_menu_permissions()
+        self._close_admin_views()
         broker = self.runtime.get("broker")
         if broker:
             broker.publish(topic="user_changed", msg={"user": self.runtime["cur_user"]})

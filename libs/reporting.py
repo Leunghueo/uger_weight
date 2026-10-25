@@ -23,7 +23,7 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from measure import KN_TO_KG, axis_rows_kg  # noqa: F401  （KN_TO_KG 兼容旧引用）
+from measure import axis_rows_kg
 
 logger = logging.getLogger(__name__)
 

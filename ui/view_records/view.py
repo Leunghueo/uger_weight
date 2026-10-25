@@ -30,7 +30,7 @@ from PySide6.QtWidgets import (
 
 from _runtime import get_runtime
 from dbstore import get_measure, list_measures
-from measure import KN_TO_KG, axis_rows_kg, results_from_report
+from measure import axis_rows_kg, results_from_report
 from reporting import export_measure_pdf
 from results_table import fill_results_table, format_value, make_results_table
 
@@ -53,8 +53,8 @@ _EMPTY_ROW: dict[str, Any] = {
 
 
 def _kg(value: Any) -> Any:
-    """计算值(kN) -> 展示值(kg)。"""
-    return round(float(value) * KN_TO_KG, 1) if isinstance(value, (int, float)) else "--"
+    """展示值 kg（VSP 输出即 kg，不做换算）。"""
+    return round(float(value), 1) if isinstance(value, (int, float)) else "--"
 
 
 class RecordDetailDialog(QDialog):

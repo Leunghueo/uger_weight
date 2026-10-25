@@ -1,8 +1,7 @@
 """称重台俯视示意图：QGraphicsScene 自绘。
 
-替代旧版卡片式示意图（见 platform_cards_legacy.py）。俯视正投影风格
-（原等距 2.5D 已按需求改为俯视图），配色沿用 platform.qss 的深色工业
-色板（方案B）。
+俯视正投影风格（原等距 2.5D 已按需求改为俯视图），配色沿用
+platform.qss 的深色工业色板（方案B）。旧版卡片式示意图已移除。
 
 布局（与 measure.PITS 一致）：
     坑1: 台 1-6   （上排偶数 2,4,6 / 下排奇数 1,3,5）
@@ -10,7 +9,7 @@
     坑3: 台 15-18 （上排偶数 / 下排奇数）
 
 对外接口（与旧卡片对齐，最小侵入）：
-    view.set_values({台号: kN值或None})   # None 表示离线，显示灰色"离线"
+    view.set_values({台号: kg值或None})   # None 表示离线，显示灰色"离线"
     view.set_highlight([台号, ...])        # 车型启用的台位，深橙高亮
 
 本系统不做结果判定，示意图只有 正常/高亮/离线 三种状态。
@@ -180,10 +179,10 @@ class PlatformTile(QGraphicsItem):
                              Qt.AlignmentFlag.AlignCenter, "离线")
             return
         f_title = QFont()
-        f_title.setPixelSize(11)
+        f_title.setPixelSize(12)
         painter.setFont(f_title)
         painter.setPen(QColor(title_c))
-        painter.drawText(QRectF(-hw, -hh + 4, hw * 2, 16),
+        painter.drawText(QRectF(-hw, -hh + 4, hw * 2, 20),
                          Qt.AlignmentFlag.AlignCenter, f"称重台{self.platform}")
 
         f_value = QFont()
@@ -192,15 +191,15 @@ class PlatformTile(QGraphicsItem):
         painter.setFont(f_value)
         painter.setPen(QColor(value_c))
         text = "--" if self._value is None else f"{self._value:.1f}"
-        painter.drawText(QRectF(-hw, -hh + 20, hw * 2, 28),
+        painter.drawText(QRectF(-hw, -hh + 20, hw * 2, 32),
                          Qt.AlignmentFlag.AlignCenter, text)
 
         f_unit = QFont()
-        f_unit.setPixelSize(10)
+        f_unit.setPixelSize(15)
         painter.setFont(f_unit)
         painter.setPen(QColor(unit_c))
-        painter.drawText(QRectF(-hw, hh - 18, hw * 2, 14),
-                         Qt.AlignmentFlag.AlignCenter, "kN")
+        painter.drawText(QRectF(-hw, hh - 30, hw * 2, 20),
+                         Qt.AlignmentFlag.AlignCenter, "kg")
 
 
 class PlatformSceneView(QGraphicsView):
