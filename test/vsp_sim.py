@@ -9,18 +9,18 @@
     - 01       从站地址
     - 03       功能码（读保持寄存器，与 read 指令一致）
     - 04       数据字节数（2 个寄存器）
-    - D1..D4   32 位大端整数（随机数，默认 16000~20000）
+    - D1..D4   32 位大端整数（随机数，默认 10000~12000）
     - CRC16    Modbus CRC，小端附加
 - 收到其他指令（如清零指令）后回复短 ACK 帧 [01, 03, 00, crc_lo, crc_hi]。
 
-上位机解析：hex2dis 取 data[-6:-2] 即 D1..D4，按 32 位大端整数解读后 /1000，
-再经 segs 标定得到 kg（当前配置 0@0,1@1000 即 ×1000，与 /1000 抵消）。
-默认随机数 17000~20000 对应约 17000~20000 kg（17~20 t/轮），便于本地联调。
+上位机解析：hex2dis 取 data[-6:-2] 即 D1..D4，按 32 位大端整数解读为 kg
+（当前配置 segs 为空、add=0，即寄存器整数就是 kg）。
+默认随机数 10000~12000 对应 10000~12000 kg（10~12 t/轮），便于本地联调。
 
 用法：
     python vsp_sim.py                                # 监听 127.0.0.1:10000
     python vsp_sim.py --host 0.0.0.0 --port-start 10000 --port-end 10020
-    python vsp_sim.py --min 17000 --max 20000        # 随机数范围
+    python vsp_sim.py --min 10000 --max 12000        # 随机数范围
 """
 from __future__ import annotations
 
@@ -110,8 +110,8 @@ def main() -> int:
     parser.add_argument("--host", default="127.0.0.1", help="监听地址 (默认 127.0.0.1)")
     parser.add_argument("--port-start", type=int, default=10000, help="起始端口 (默认 10000)")
     parser.add_argument("--port-end", type=int, default=10000, help="结束端口 (默认 10000)")
-    parser.add_argument("--min", type=int, default=17000, help="随机数下限 (默认 17000)")
-    parser.add_argument("--max", type=int, default=20000, help="随机数上限 (默认 20000)")
+    parser.add_argument("--min", type=int, default=10000, help="随机数下限 (默认 10000)")
+    parser.add_argument("--max", type=int, default=12000, help="随机数上限 (默认 12000)")
     args = parser.parse_args()
 
     if not (0 <= args.min <= args.max <= 0xFFFFFFFF):

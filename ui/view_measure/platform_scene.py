@@ -190,7 +190,7 @@ class PlatformTile(QGraphicsItem):
         f_value.setBold(True)
         painter.setFont(f_value)
         painter.setPen(QColor(value_c))
-        text = "--" if self._value is None else f"{self._value:.1f}"
+        text = "--" if self._value is None else f"{self._value:.0f}"
         painter.drawText(QRectF(-hw, -hh + 20, hw * 2, 32),
                          Qt.AlignmentFlag.AlignCenter, text)
 

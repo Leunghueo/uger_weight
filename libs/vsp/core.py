@@ -18,6 +18,15 @@ except ModuleNotFoundError:  # pragma: no cover - fallback for package imports
 ParserFunc = Callable[[bytes], float]
 PARSERS: dict[str, ParserFunc] = {}
 
+logger = logging.getLogger(__name__)
+
+#: 工程量上限：超过此值视为无效读数（归零）。
+# 现场称重台真实量程远小于此（单轮约 2 万 kg 量级）。设置它的原因是：
+# 零点漂移到负数时，设备以补码下发（如 -1 -> FFFFFFFF），而无符号解析
+# 会把它读成 4294967295，经换算后变成 400 万量级的假值，直接污染轮重、
+# 轴重与整车重累加。超过上限一律按 0 处理，保证"最小值不为负、异常不放大"。
+VALUE_LIMIT = 1.0e6
+
 def parser(name: str) -> Callable[[ParserFunc], ParserFunc]:
     def decorator(func: ParserFunc) -> ParserFunc:
         PARSERS[name] = func
@@ -113,8 +122,18 @@ class VSPPoint:
         return self.config.endpoint
 
     def update(self, raw_value: float) -> None:
+        value = round(self.config.segs.apply(raw_value) + self.config.add, 3)
+        if value > VALUE_LIMIT:
+            # 超上限只可能是异常：补码负数被无符号解析、或帧错位/脏数据。
+            # 归零并记录原始值，避免假值进入测量与整车重累加。
+            logger.warning(
+                "点位 %s 读数 %s 超过上限 %s，按 0 处理（原始采样 %s）",
+                self.name, value, VALUE_LIMIT, raw_value,
+            )
+            raw_value = 0.0
+            value = 0.0
         self.raw_value = raw_value
-        self.value = round(self.config.segs.apply(raw_value)+self.config.add,3)
+        self.value = value
         self.alive = True
         self.error = ""
         self.updated_at = time.time()
