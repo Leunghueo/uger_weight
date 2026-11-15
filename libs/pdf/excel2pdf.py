@@ -14,6 +14,7 @@ import platform
 import tempfile
 import xml.etree.ElementTree as ET
 import zipfile
+from copy import copy
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -28,6 +29,7 @@ from openpyxl.drawing.spreadsheet_drawing import (
     TwoCellAnchor,
 )
 from openpyxl.drawing.xdr import XDRPoint2D, XDRPositiveSize2D
+from openpyxl.styles.colors import Color
 
 logger = logging.getLogger(__name__)
 
@@ -52,6 +54,7 @@ class PdfReport:
         self._output_dir = Path(output_dir)
         self._output_dir.mkdir(parents=True, exist_ok=True)
         self._cells: dict[str, Any] = {}
+        self._font_colors: dict[str, str] = {}
         self._wb = None
         self._ws = None
 
@@ -324,6 +327,48 @@ class PdfReport:
             self.set_cell(cell_ref, value)
         return self
 
+    def set_cell_font_color(self, cell_ref: str, color: str = "FF0000") -> "PdfReport":
+        """
+        设置指定单元格的字体颜色（写回时应用，保留原字体其他属性）
+
+        Args:
+            cell_ref: 单元格引用，如 "A1", "B2"
+            color: 6 位 RGB 颜色，如 "FF0000" 表示红色
+
+        Returns:
+            self
+        """
+        self._font_colors[cell_ref.upper()] = color
+        return self
+
+    def set_cell_font_colors(self, colors: dict[str, str]) -> "PdfReport":
+        """
+        批量设置单元格字体颜色
+
+        Args:
+            colors: 字典，key 为单元格引用，value 为 6 位 RGB 颜色
+
+        Returns:
+            self
+        """
+        for cell_ref, color in colors.items():
+            self.set_cell_font_color(cell_ref, color)
+        return self
+
+    def _apply_font_colors(self) -> None:
+        """把记录的字体颜色应用到工作表单元格（仅改颜色，保留其他字体属性）。"""
+        if self._ws is None:
+            return
+        for coord, color in self._font_colors.items():
+            try:
+                rgb = color if len(color) == 8 else "FF" + color
+                cell = self._ws[coord]
+                font = copy(cell.font)
+                font.color = Color(rgb=rgb, type="rgb")
+                cell.font = font
+            except Exception:
+                pass
+
     def fill_from_workbook(self, source_wb) -> "PdfReport":
         """
         从另一个工作簿填充数据到当前模板
@@ -375,6 +420,7 @@ class PdfReport:
                 cell.value = data.get("value")
             except Exception:
                 pass
+        self._apply_font_colors()
 
         self._wb.save(output_path)
         logger.info(f"Excel 报告已保存: {output_path}")
@@ -413,6 +459,7 @@ class PdfReport:
                 cell.value = data.get("value")
             except Exception:
                 pass
+        self._apply_font_colors()
 
         # 创建临时目录用于 LibreOffice 输出
         with tempfile.TemporaryDirectory() as tmp_dir:
